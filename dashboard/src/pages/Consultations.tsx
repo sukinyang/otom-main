@@ -5,8 +5,7 @@ import {
   Mail,
   User,
   CheckCircle2,
-  Circle,
-  Clock
+  Circle
 } from 'lucide-react'
 import clsx from 'clsx'
 

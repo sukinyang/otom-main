@@ -27,6 +27,13 @@ import {
   Tooltip
 } from 'recharts'
 import clsx from 'clsx'
+import type { LucideIcon } from 'lucide-react'
+
+interface Interviewee {
+  name: string
+  department: string
+  status: 'done' | 'pending'
+}
 
 const recentProcesses = [
   { id: 1, name: 'Customer Onboarding', department: 'Sales', bottlenecks: 1, status: 'active' },
@@ -35,7 +42,7 @@ const recentProcesses = [
   { id: 4, name: 'Bug Report Triage', department: 'Engineering', bottlenecks: 0, status: 'optimized' },
 ]
 
-const interviewees = [
+const interviewees: Interviewee[] = [
   { name: 'Sarah Johnson', department: 'Sales', status: 'done' },
   { name: 'Mike Chen', department: 'Engineering', status: 'done' },
   { name: 'Emily Davis', department: 'Finance', status: 'pending' },
@@ -380,7 +387,7 @@ interface StatCardProps {
   value: string
   change: string
   changeType: 'positive' | 'negative'
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: LucideIcon
   iconBg: string
   iconColor: string
 }
@@ -406,12 +413,6 @@ function StatCard({ label, value, change, changeType, icon: Icon, iconBg, iconCo
       </p>
     </div>
   )
-}
-
-interface Interviewee {
-  name: string
-  department: string
-  status: 'done' | 'pending'
 }
 
 function InterviewStatus({ interviewees }: { interviewees: Interviewee[] }) {

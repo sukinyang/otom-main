@@ -6,11 +6,18 @@ import {
   Palette,
   Globe
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'appearance' | 'integrations'
 
-const tabs: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
+interface Tab {
+  id: SettingsTab
+  label: string
+  icon: LucideIcon
+}
+
+const tabs: Tab[] = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield },
@@ -18,7 +25,14 @@ const tabs: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?:
   { id: 'integrations', label: 'Integrations', icon: Globe },
 ]
 
-const integrations = [
+interface Integration {
+  id: string
+  name: string
+  description: string
+  connected: boolean
+}
+
+const integrations: Integration[] = [
   { id: 'slack', name: 'Slack', description: 'Receive notifications in Slack', connected: true },
   { id: 'google', name: 'Google Calendar', description: 'Sync consultations with your calendar', connected: false },
   { id: 'salesforce', name: 'Salesforce', description: 'Sync client data with Salesforce', connected: false },
@@ -191,7 +205,7 @@ function AppearanceSettings() {
   )
 }
 
-function IntegrationSettings({ integrations }: { integrations: typeof integrations }) {
+function IntegrationSettings({ integrations }: { integrations: Integration[] }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6">
       <h3 className="font-semibold text-slate-900 mb-2">Integrations</h3>

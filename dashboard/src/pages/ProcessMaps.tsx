@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import {
   Plus,
-  Search,
   ZoomIn,
   ZoomOut,
   Maximize2,
@@ -10,7 +9,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Users,
   ArrowRight
 } from 'lucide-react'
 import clsx from 'clsx'
