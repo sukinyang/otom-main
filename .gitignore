@@ -1,0 +1,12 @@
+
+# Build outputs
+**/dist/
+**/node_modules/
+*.app
+*.dmg
+*.exe
+
+# Build outputs
+**/dist/
+**/node_modules/
+*.app
