@@ -8,11 +8,12 @@ import {
   Zap,
   Clock,
   Users,
-  Wrench,
   TrendingUp,
   Phone,
   MessageSquare,
-  Mail
+  Mail,
+  CheckCircle2,
+  User
 } from 'lucide-react'
 import {
   PieChart,
@@ -34,10 +35,14 @@ const recentProcesses = [
   { id: 4, name: 'Bug Report Triage', department: 'Engineering', bottlenecks: 0, status: 'optimized' },
 ]
 
-const automationData = [
-  { name: 'Manual', value: 45, color: '#ef4444' },
-  { name: 'Semi-Auto', value: 30, color: '#f59e0b' },
-  { name: 'Automated', value: 25, color: '#22c55e' },
+const interviewees = [
+  { name: 'Sarah Johnson', department: 'Sales', status: 'done' },
+  { name: 'Mike Chen', department: 'Engineering', status: 'done' },
+  { name: 'Emily Davis', department: 'Finance', status: 'pending' },
+  { name: 'John Smith', department: 'Finance', status: 'done' },
+  { name: 'Amanda Wilson', department: 'Operations', status: 'pending' },
+  { name: 'David Brown', department: 'HR', status: 'done' },
+  { name: 'Lisa Taylor', department: 'Marketing', status: 'pending' },
 ]
 
 const topInsights = [
@@ -315,44 +320,8 @@ export default function Overview() {
           </div>
         </div>
 
-        {/* Automation Level */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h3 className="font-semibold text-slate-900 mb-4">Automation Level</h3>
-          <ResponsiveContainer width="100%" height={160}>
-            <PieChart>
-              <Pie
-                data={automationData}
-                cx="50%"
-                cy="50%"
-                innerRadius={45}
-                outerRadius={65}
-                paddingAngle={3}
-                dataKey="value"
-              >
-                {automationData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex justify-center gap-4 text-xs mb-4">
-            {automationData.map((item) => (
-              <span key={item.name} className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                {item.name}
-              </span>
-            ))}
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-slate-500">Overall Score</p>
-            <div className="flex items-center gap-2 justify-center mt-1">
-              <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                <div className="h-full bg-green-500 rounded-full" style={{ width: '55%' }} />
-              </div>
-              <span className="text-sm font-semibold text-slate-900">55%</span>
-            </div>
-          </div>
-        </div>
+        {/* Interview Status */}
+        <InterviewStatus interviewees={interviewees} />
       </div>
 
       {/* Top Insights */}
@@ -435,6 +404,106 @@ function StatCard({ label, value, change, changeType, icon: Icon, iconBg, iconCo
         <TrendingUp size={12} className={changeType === 'negative' ? 'rotate-180' : ''} />
         {change} vs last week
       </p>
+    </div>
+  )
+}
+
+interface Interviewee {
+  name: string
+  department: string
+  status: 'done' | 'pending'
+}
+
+function InterviewStatus({ interviewees }: { interviewees: Interviewee[] }) {
+  const [filter, setFilter] = useState<'all' | 'done' | 'pending'>('all')
+
+  const completedCount = interviewees.filter(i => i.status === 'done').length
+  const pendingCount = interviewees.filter(i => i.status === 'pending').length
+
+  const filteredInterviewees = filter === 'all'
+    ? interviewees
+    : interviewees.filter(i => i.status === filter)
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-slate-900">Interview Status</h3>
+        <button className="text-sm text-slate-600 border border-slate-200 px-3 py-1 rounded-lg hover:bg-slate-50">
+          View All
+        </button>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setFilter('all')}
+          className={clsx(
+            'px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
+            filter === 'all'
+              ? 'bg-slate-900 text-white'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          )}
+        >
+          All ({interviewees.length})
+        </button>
+        <button
+          onClick={() => setFilter('done')}
+          className={clsx(
+            'px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
+            filter === 'done'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-green-50 text-green-600 hover:bg-green-100'
+          )}
+        >
+          Completed ({completedCount})
+        </button>
+        <button
+          onClick={() => setFilter('pending')}
+          className={clsx(
+            'px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
+            filter === 'pending'
+              ? 'bg-yellow-100 text-yellow-700'
+              : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'
+          )}
+        >
+          Pending ({pendingCount})
+        </button>
+      </div>
+
+      {/* Interviewee List */}
+      <div className="space-y-3 max-h-[280px] overflow-y-auto">
+        {filteredInterviewees.map((person, i) => (
+          <div key={i} className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                <User size={18} className="text-slate-400" />
+              </div>
+              <div>
+                <p className="font-medium text-slate-900">{person.name}</p>
+                <p className="text-sm text-slate-500">{person.department}</p>
+              </div>
+            </div>
+            <span className={clsx(
+              'flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium',
+              person.status === 'done'
+                ? 'bg-green-50 text-green-600'
+                : 'bg-yellow-50 text-yellow-600'
+            )}>
+              {person.status === 'done' ? (
+                <>
+                  <CheckCircle2 size={14} />
+                  Done
+                </>
+              ) : (
+                <>
+                  <Clock size={14} />
+                  Pending
+                </>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

@@ -7,6 +7,7 @@ import {
   FileBarChart,
   GitBranch,
   Lightbulb,
+  Users,
   Settings,
   HelpCircle,
   LogOut,
@@ -26,6 +27,7 @@ const mainNavItems = [
 const secondaryNavItems = [
   { path: '/processes', label: 'Processes', icon: GitBranch },
   { path: '/insights', label: 'Insights', icon: Lightbulb },
+  { path: '/employees', label: 'Employees', icon: Users },
 ]
 
 const bottomNavItems = [
@@ -44,13 +46,18 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-slate-200">
         <div className="flex items-center gap-2">
-          <img
-            src="/otom-icon.svg"
-            alt="Otom"
-            className="w-8 h-8"
-          />
-          {!collapsed && (
-            <span className="text-xl font-bold tracking-tight">OTOM</span>
+          {collapsed ? (
+            <img
+              src="/otom-icon.svg"
+              alt="Otom"
+              className="w-8 h-8"
+            />
+          ) : (
+            <img
+              src="/otom-logo-black.png"
+              alt="Otom"
+              className="h-7"
+            />
           )}
         </div>
         <button

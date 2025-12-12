@@ -7,6 +7,7 @@ import ProcessMaps from './pages/ProcessMaps'
 import Reports from './pages/Reports'
 import Processes from './pages/Processes'
 import Insights from './pages/Insights'
+import Employees from './pages/Employees'
 import Settings from './pages/Settings'
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
         <Route path="reports" element={<Reports />} />
         <Route path="processes" element={<Processes />} />
         <Route path="insights" element={<Insights />} />
+        <Route path="employees" element={<Employees />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
