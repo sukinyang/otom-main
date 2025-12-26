@@ -11,14 +11,26 @@ import uuid
 
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import PlainTextResponse
-from twilio.rest import Client
-from twilio.twiml.messaging_response import MessagingResponse
-from twilio.request_validator import RequestValidator
+
+# Handle Twilio import gracefully
+try:
+    from twilio.rest import Client
+    from twilio.twiml.messaging_response import MessagingResponse
+    from twilio.request_validator import RequestValidator
+    TWILIO_AVAILABLE = True
+except ImportError:
+    Client = None
+    MessagingResponse = None
+    RequestValidator = None
+    TWILIO_AVAILABLE = False
 
 from utils.logger import setup_logger
 from integrations.supabase_mcp import supabase
 
 logger = setup_logger("sms_handler")
+
+if not TWILIO_AVAILABLE:
+    logger.warning("Twilio package not installed - SMS features unavailable")
 
 router = APIRouter(prefix="/sms", tags=["SMS"])
 
