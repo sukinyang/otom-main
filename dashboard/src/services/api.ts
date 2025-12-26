@@ -252,6 +252,13 @@ class ApiService {
     })
   }
 
+  async importEmployees(employees: Partial<Employee>[]) {
+    return this.fetch<{ success: boolean; imported: number; skipped: number; errors: string[] }>('/employees/import', {
+      method: 'POST',
+      body: JSON.stringify({ employees }),
+    })
+  }
+
   // SMS
   async getSMSMessages(limit = 100) {
     return this.fetch<SMSMessage[]>(`/sms/messages?limit=${limit}`)

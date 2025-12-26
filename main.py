@@ -181,6 +181,61 @@ async def update_employee(employee_id: str, request: Request):
         logger.error(f"Failed to update employee: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/employees/import")
+async def import_employees(request: Request):
+    """Bulk import employees from parsed data"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        data = await request.json()
+        employees = data.get("employees", [])
+        if not employees:
+            raise HTTPException(status_code=400, detail="No employees data provided")
+
+        imported = 0
+        skipped = 0
+        errors = []
+
+        for emp in employees:
+            try:
+                # Validate required fields
+                if not emp.get("name") or not emp.get("phone_number"):
+                    skipped += 1
+                    errors.append(f"Missing name or phone for: {emp.get('name', 'Unknown')}")
+                    continue
+
+                # Prepare employee data
+                employee_data = {
+                    "name": emp.get("name", "").strip(),
+                    "phone_number": emp.get("phone_number", "").strip(),
+                    "email": emp.get("email", "").strip() or None,
+                    "company": emp.get("company", "").strip() or None,
+                    "department": emp.get("department", "").strip() or None,
+                    "role": emp.get("role", "").strip() or None,
+                    "status": emp.get("status", "pending"),
+                    "notes": emp.get("notes", "").strip() or None
+                }
+
+                # Insert into database
+                supabase.client.table("employees").insert(employee_data).execute()
+                imported += 1
+            except Exception as e:
+                skipped += 1
+                errors.append(f"Error importing {emp.get('name', 'Unknown')}: {str(e)}")
+
+        return {
+            "success": True,
+            "imported": imported,
+            "skipped": skipped,
+            "errors": errors[:10]  # Return first 10 errors
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to import employees: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Consultations endpoints
 @app.get("/consultations")
 async def get_consultations():

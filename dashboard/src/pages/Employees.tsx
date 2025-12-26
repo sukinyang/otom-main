@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Search,
   Users,
@@ -9,7 +9,11 @@ import {
   Plus,
   Loader2,
   MessageCircle,
-  X
+  X,
+  Upload,
+  FileSpreadsheet,
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react'
 import clsx from 'clsx'
 import { api, Employee } from '../services/api'
@@ -24,6 +28,15 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   active: { label: 'Active', color: 'bg-green-100 text-green-700' },
 }
 
+interface ParsedEmployee {
+  name: string
+  phone_number: string
+  email?: string
+  company?: string
+  department?: string
+  role?: string
+}
+
 export default function Employees() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
@@ -32,6 +45,15 @@ export default function Employees() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [addForm, setAddForm] = useState({ name: '', phone_number: '', email: '', company: '', department: '', role: '' })
   const [saving, setSaving] = useState(false)
+
+  // Import state
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [parsedData, setParsedData] = useState<ParsedEmployee[]>([])
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null)
+  const [parseError, setParseError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchEmployees()
@@ -81,6 +103,161 @@ export default function Employees() {
     }
   }
 
+  const parseCSV = (text: string): ParsedEmployee[] => {
+    const lines = text.split('\n').filter(line => line.trim())
+    if (lines.length < 2) return []
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''))
+    const employees: ParsedEmployee[] = []
+
+    // Map common header variations
+    const headerMap: Record<string, string> = {
+      'name': 'name',
+      'full name': 'name',
+      'fullname': 'name',
+      'employee name': 'name',
+      'phone': 'phone_number',
+      'phone_number': 'phone_number',
+      'phone number': 'phone_number',
+      'mobile': 'phone_number',
+      'telephone': 'phone_number',
+      'email': 'email',
+      'email address': 'email',
+      'company': 'company',
+      'company name': 'company',
+      'organization': 'company',
+      'department': 'department',
+      'dept': 'department',
+      'role': 'role',
+      'job title': 'role',
+      'title': 'role',
+      'position': 'role'
+    }
+
+    const columnIndices: Record<string, number> = {}
+    headers.forEach((header, index) => {
+      const mappedField = headerMap[header]
+      if (mappedField) {
+        columnIndices[mappedField] = index
+      }
+    })
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseCSVLine(lines[i])
+      if (values.length === 0) continue
+
+      const emp: ParsedEmployee = {
+        name: values[columnIndices['name']] || '',
+        phone_number: values[columnIndices['phone_number']] || '',
+        email: values[columnIndices['email']] || undefined,
+        company: values[columnIndices['company']] || undefined,
+        department: values[columnIndices['department']] || undefined,
+        role: values[columnIndices['role']] || undefined
+      }
+
+      if (emp.name && emp.phone_number) {
+        employees.push(emp)
+      }
+    }
+
+    return employees
+  }
+
+  const parseCSVLine = (line: string): string[] => {
+    const values: string[] = []
+    let current = ''
+    let inQuotes = false
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+      if (char === '"') {
+        inQuotes = !inQuotes
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim())
+        current = ''
+      } else {
+        current += char
+      }
+    }
+    values.push(current.trim())
+    return values
+  }
+
+  const parseJSON = (text: string): ParsedEmployee[] => {
+    const data = JSON.parse(text)
+    const items = Array.isArray(data) ? data : data.employees || data.data || []
+
+    return items.map((item: Record<string, string>) => ({
+      name: item.name || item.fullName || item.full_name || '',
+      phone_number: item.phone_number || item.phoneNumber || item.phone || item.mobile || '',
+      email: item.email || item.emailAddress || undefined,
+      company: item.company || item.organization || undefined,
+      department: item.department || item.dept || undefined,
+      role: item.role || item.title || item.position || item.jobTitle || undefined
+    })).filter((emp: ParsedEmployee) => emp.name && emp.phone_number)
+  }
+
+  const handleFileSelect = async (file: File) => {
+    setImportFile(file)
+    setParseError(null)
+    setParsedData([])
+    setImportResult(null)
+
+    try {
+      const text = await file.text()
+      let parsed: ParsedEmployee[] = []
+
+      if (file.name.endsWith('.csv')) {
+        parsed = parseCSV(text)
+      } else if (file.name.endsWith('.json')) {
+        parsed = parseJSON(text)
+      } else if (file.name.endsWith('.tsv') || file.name.endsWith('.txt')) {
+        // TSV format
+        const tsvText = text.replace(/\t/g, ',')
+        parsed = parseCSV(tsvText)
+      } else {
+        setParseError('Unsupported file format. Please use CSV, JSON, or TSV files.')
+        return
+      }
+
+      if (parsed.length === 0) {
+        setParseError('No valid employees found. Make sure your file has "name" and "phone" columns.')
+        return
+      }
+
+      setParsedData(parsed)
+    } catch (error) {
+      console.error('Failed to parse file:', error)
+      setParseError('Failed to parse file. Please check the file format.')
+    }
+  }
+
+  const handleImport = async () => {
+    if (parsedData.length === 0) return
+
+    setImporting(true)
+    try {
+      const result = await api.importEmployees(parsedData)
+      setImportResult(result)
+      if (result.imported > 0) {
+        fetchEmployees()
+      }
+    } catch (error) {
+      console.error('Failed to import:', error)
+      setImportResult({ imported: 0, skipped: parsedData.length, errors: ['Import failed. Please try again.'] })
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const resetImportModal = () => {
+    setShowImportModal(false)
+    setImportFile(null)
+    setParsedData([])
+    setImportResult(null)
+    setParseError(null)
+  }
+
   const filteredEmployees = employees.filter(emp => {
     const matchesSearch = emp.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       emp.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -103,13 +280,22 @@ export default function Employees() {
           <h1 className="text-2xl font-bold text-slate-900">Employees</h1>
           <p className="text-slate-600">Manage team members for outreach and interviews</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
-        >
-          <Plus size={18} />
-          Add Employee
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <Upload size={18} />
+            Import
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            <Plus size={18} />
+            Add Employee
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -352,6 +538,198 @@ export default function Employees() {
                 {saving ? 'Adding...' : 'Add Employee'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-slate-900">Import Employees</h2>
+              <button onClick={resetImportModal} className="p-1 hover:bg-slate-100 rounded">
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+
+            {/* Import Result */}
+            {importResult && (
+              <div className={clsx(
+                'p-4 rounded-lg mb-4',
+                importResult.imported > 0 ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'
+              )}>
+                <div className="flex items-start gap-3">
+                  {importResult.imported > 0 ? (
+                    <CheckCircle2 size={20} className="text-green-600 mt-0.5" />
+                  ) : (
+                    <AlertCircle size={20} className="text-amber-600 mt-0.5" />
+                  )}
+                  <div>
+                    <p className={clsx('font-medium', importResult.imported > 0 ? 'text-green-800' : 'text-amber-800')}>
+                      {importResult.imported > 0
+                        ? `Successfully imported ${importResult.imported} employee${importResult.imported > 1 ? 's' : ''}`
+                        : 'Import completed with issues'}
+                    </p>
+                    {importResult.skipped > 0 && (
+                      <p className="text-sm text-slate-600 mt-1">
+                        {importResult.skipped} record{importResult.skipped > 1 ? 's' : ''} skipped
+                      </p>
+                    )}
+                    {importResult.errors.length > 0 && (
+                      <ul className="text-sm text-slate-600 mt-2 space-y-1">
+                        {importResult.errors.map((error, i) => (
+                          <li key={i}>• {error}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={resetImportModal}
+                  className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm hover:bg-slate-800 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+
+            {/* File Upload */}
+            {!importResult && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.json,.tsv,.txt"
+                  onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+                  className="hidden"
+                />
+
+                {!importFile && (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      const file = e.dataTransfer.files[0]
+                      if (file) handleFileSelect(file)
+                    }}
+                    className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition-colors"
+                  >
+                    <FileSpreadsheet size={48} className="text-slate-400 mx-auto mb-3" />
+                    <p className="text-slate-900 font-medium mb-1">Drop your file here or click to browse</p>
+                    <p className="text-sm text-slate-500">Supports CSV, JSON, and TSV files</p>
+                    <p className="text-xs text-slate-400 mt-2">
+                      Required columns: name, phone (or phone_number)
+                    </p>
+                  </div>
+                )}
+
+                {/* Parse Error */}
+                {parseError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+                    <div className="flex items-center gap-2 text-red-700">
+                      <AlertCircle size={18} />
+                      <p className="font-medium">{parseError}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setImportFile(null)
+                        setParseError(null)
+                        fileInputRef.current?.click()
+                      }}
+                      className="mt-3 text-sm text-red-600 hover:text-red-800 underline"
+                    >
+                      Try another file
+                    </button>
+                  </div>
+                )}
+
+                {/* Parsed Data Preview */}
+                {parsedData.length > 0 && (
+                  <>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet size={18} className="text-slate-500" />
+                        <span className="text-sm text-slate-700">{importFile?.name}</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setImportFile(null)
+                          setParsedData([])
+                          fileInputRef.current?.click()
+                        }}
+                        className="text-sm text-slate-500 hover:text-slate-700"
+                      >
+                        Change file
+                      </button>
+                    </div>
+
+                    <div className="bg-slate-50 rounded-lg p-3 mb-4">
+                      <p className="text-sm text-slate-700">
+                        <span className="font-medium">{parsedData.length}</span> employees ready to import
+                      </p>
+                    </div>
+
+                    <div className="flex-1 overflow-auto border border-slate-200 rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 sticky top-0">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium text-slate-700">Name</th>
+                            <th className="text-left px-3 py-2 font-medium text-slate-700">Phone</th>
+                            <th className="text-left px-3 py-2 font-medium text-slate-700">Email</th>
+                            <th className="text-left px-3 py-2 font-medium text-slate-700">Company</th>
+                            <th className="text-left px-3 py-2 font-medium text-slate-700">Role</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {parsedData.slice(0, 10).map((emp, i) => (
+                            <tr key={i} className="hover:bg-slate-50">
+                              <td className="px-3 py-2 text-slate-900">{emp.name}</td>
+                              <td className="px-3 py-2 text-slate-600">{emp.phone_number}</td>
+                              <td className="px-3 py-2 text-slate-600">{emp.email || '-'}</td>
+                              <td className="px-3 py-2 text-slate-600">{emp.company || '-'}</td>
+                              <td className="px-3 py-2 text-slate-600">{emp.role || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {parsedData.length > 10 && (
+                        <div className="px-3 py-2 bg-slate-50 text-sm text-slate-500 border-t border-slate-200">
+                          +{parsedData.length - 10} more rows
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-4">
+                      <button
+                        onClick={resetImportModal}
+                        className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleImport}
+                        disabled={importing}
+                        className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {importing ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Importing...
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={16} />
+                            Import {parsedData.length} Employees
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
