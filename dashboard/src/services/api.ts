@@ -1,4 +1,29 @@
-const API_BASE_URL = '/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://otom-production-1790.up.railway.app'
+
+export interface Employee {
+  id: string
+  name: string
+  phone_number: string
+  email?: string
+  company?: string
+  department?: string
+  role?: string
+  status: string
+  notes?: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface SMSMessage {
+  id: string
+  employee_id?: string
+  phone_number: string
+  direction: 'inbound' | 'outbound'
+  message: string
+  status: string
+  created_at: string
+  employee_name?: string
+}
 
 export interface Consultation {
   session_id: string
@@ -153,6 +178,48 @@ class ApiService {
 
   async getCallStats(days = 30) {
     return this.fetch<CallStats>(`/voice/calls/stats?days=${days}`)
+  }
+
+  // Employees
+  async getEmployees() {
+    return this.fetch<Employee[]>('/employees')
+  }
+
+  async getEmployee(id: string) {
+    return this.fetch<Employee>(`/employees/${id}`)
+  }
+
+  async createEmployee(data: Partial<Employee>) {
+    return this.fetch<Employee>('/employees', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateEmployee(id: string, data: Partial<Employee>) {
+    return this.fetch<Employee>(`/employees/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // SMS
+  async getSMSMessages(limit = 100) {
+    return this.fetch<SMSMessage[]>(`/sms/messages?limit=${limit}`)
+  }
+
+  async sendSMS(phoneNumber: string, message: string, employeeId?: string) {
+    return this.fetch<{ success: boolean; message_sid: string }>('/sms/send', {
+      method: 'POST',
+      body: JSON.stringify({ to: phoneNumber, message, employee_id: employeeId }),
+    })
+  }
+
+  async sendOutreach(phoneNumber: string, name: string, company: string, employeeId?: string) {
+    return this.fetch<{ success: boolean; message_sid: string }>('/sms/outreach', {
+      method: 'POST',
+      body: JSON.stringify({ phone_number: phoneNumber, name, company, employee_id: employeeId }),
+    })
   }
 }
 

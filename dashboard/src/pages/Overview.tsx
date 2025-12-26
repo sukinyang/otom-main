@@ -2,24 +2,17 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
-  AlertTriangle,
-  GitBranch,
   RefreshCw,
-  Zap,
   Clock,
   Users,
   TrendingUp,
   Phone,
   MessageSquare,
   CheckCircle2,
-  User,
   Loader2
 } from 'lucide-react'
-import { api, CallSession, CallStats } from '../services/api'
+import { api, CallSession, CallStats, Employee } from '../services/api'
 import {
-  PieChart,
-  Pie,
-  Cell,
   ResponsiveContainer,
   AreaChart,
   Area,
@@ -29,69 +22,6 @@ import {
 } from 'recharts'
 import clsx from 'clsx'
 import type { LucideIcon } from 'lucide-react'
-
-interface Interviewee {
-  name: string
-  department: string
-  status: 'done' | 'pending'
-}
-
-const recentProcesses = [
-  { id: 1, name: 'Customer Onboarding', department: 'Sales', bottlenecks: 1, status: 'active' },
-  { id: 2, name: 'Invoice Processing', department: 'Finance', bottlenecks: 2, status: 'needs_improvement' },
-  { id: 3, name: 'Employee Offboarding', department: 'HR', bottlenecks: 1, status: 'active' },
-  { id: 4, name: 'Bug Report Triage', department: 'Engineering', bottlenecks: 0, status: 'optimized' },
-]
-
-const interviewees: Interviewee[] = [
-  { name: 'Sarah Johnson', department: 'Sales', status: 'done' },
-  { name: 'Mike Chen', department: 'Engineering', status: 'done' },
-  { name: 'Emily Davis', department: 'Finance', status: 'pending' },
-  { name: 'John Smith', department: 'Finance', status: 'done' },
-  { name: 'Amanda Wilson', department: 'Operations', status: 'pending' },
-  { name: 'David Brown', department: 'HR', status: 'done' },
-  { name: 'Lisa Taylor', department: 'Marketing', status: 'pending' },
-]
-
-const topInsights = [
-  {
-    id: 1,
-    type: 'bottleneck',
-    title: 'Proposal Creation taking 2-3 hours per deal',
-    context: 'in Customer Onboarding',
-    color: 'bg-red-50 border-red-200',
-    iconBg: 'bg-red-100',
-    iconColor: 'text-red-600'
-  },
-  {
-    id: 2,
-    type: 'duplicate',
-    title: 'Customer data entered in multiple systems',
-    context: '4 hrs/week lost',
-    color: 'bg-amber-50 border-amber-200',
-    iconBg: 'bg-amber-100',
-    iconColor: 'text-amber-600'
-  },
-  {
-    id: 3,
-    type: 'improvement',
-    title: 'Automate CRM sync to save 6+ hours/week',
-    context: 'high priority',
-    color: 'bg-green-50 border-green-200',
-    iconBg: 'bg-green-100',
-    iconColor: 'text-green-600'
-  },
-]
-
-const sessionData = [
-  { day: 'Mon', sessions: 6, consultations: 3 },
-  { day: 'Tue', sessions: 8, consultations: 4 },
-  { day: 'Wed', sessions: 12, consultations: 6 },
-  { day: 'Thu', sessions: 9, consultations: 5 },
-  { day: 'Fri', sessions: 7, consultations: 3 },
-  { day: 'Sat', sessions: 3, consultations: 1 },
-  { day: 'Sun', sessions: 2, consultations: 1 },
-]
 
 function formatDuration(seconds?: number): string {
   if (!seconds) return '-'
@@ -124,15 +54,38 @@ function formatTimeAgo(dateString: string): string {
 
 const statusConfig = {
   active: { label: 'Active', color: 'bg-blue-100 text-blue-700' },
-  needs_improvement: { label: 'Needs Improvement', color: 'bg-red-100 text-red-700' },
-  optimized: { label: 'Optimized', color: 'bg-green-100 text-green-700' },
   completed: { label: 'completed', color: 'bg-green-100 text-green-700' },
 }
 
+function generateSessionData(calls: CallSession[]) {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const counts: Record<string, { sessions: number; completed: number }> = {}
+
+  days.forEach(day => {
+    counts[day] = { sessions: 0, completed: 0 }
+  })
+
+  calls.forEach(call => {
+    const date = new Date(call.created_at)
+    const dayName = days[date.getDay()]
+    counts[dayName].sessions++
+    if (call.status === 'completed') {
+      counts[dayName].completed++
+    }
+  })
+
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => ({
+    day,
+    sessions: counts[day].sessions,
+    completed: counts[day].completed
+  }))
+}
 
 export default function Overview() {
   const [stats, setStats] = useState<CallStats | null>(null)
   const [recentCalls, setRecentCalls] = useState<CallSession[]>([])
+  const [allCalls, setAllCalls] = useState<CallSession[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
 
@@ -143,12 +96,16 @@ export default function Overview() {
   async function fetchData() {
     try {
       setLoading(true)
-      const [statsResponse, callsResponse] = await Promise.all([
+      const [statsResponse, callsResponse, allCallsResponse, employeesResponse] = await Promise.all([
         api.getCallStats(),
-        api.getCallSessions({ limit: 5 })
+        api.getCallSessions({ limit: 5 }),
+        api.getCallSessions({ limit: 100 }),
+        api.getEmployees()
       ])
       setStats(statsResponse)
       setRecentCalls(callsResponse.calls)
+      setAllCalls(allCallsResponse.calls)
+      setEmployees(employeesResponse)
       setLastUpdated(new Date())
     } catch (err) {
       console.error('Failed to fetch overview data:', err)
@@ -156,6 +113,8 @@ export default function Overview() {
       setLoading(false)
     }
   }
+
+  const sessionData = generateSessionData(allCalls)
 
   return (
     <div className="space-y-6">
@@ -183,8 +142,6 @@ export default function Overview() {
         <StatCard
           label="Total Sessions"
           value={loading ? '...' : String(stats?.total_calls || 0)}
-          change="+12%"
-          changeType="positive"
           icon={Phone}
           iconBg="bg-blue-100"
           iconColor="text-blue-600"
@@ -192,8 +149,6 @@ export default function Overview() {
         <StatCard
           label="Active Consultations"
           value={loading ? '...' : String(stats?.active_calls || 0)}
-          change="+8%"
-          changeType="positive"
           icon={MessageSquare}
           iconBg="bg-green-100"
           iconColor="text-green-600"
@@ -201,8 +156,6 @@ export default function Overview() {
         <StatCard
           label="Avg. Duration"
           value={loading ? '...' : (stats?.avg_duration_formatted || '0m')}
-          change="-5%"
-          changeType="negative"
           icon={Clock}
           iconBg="bg-purple-100"
           iconColor="text-purple-600"
@@ -210,8 +163,6 @@ export default function Overview() {
         <StatCard
           label="Completion Rate"
           value={loading ? '...' : `${stats?.completion_rate || 0}%`}
-          change="+3%"
-          changeType="positive"
           icon={TrendingUp}
           iconBg="bg-green-100"
           iconColor="text-green-600"
@@ -219,16 +170,20 @@ export default function Overview() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Sessions Chart */}
-        <div className="col-span-2 bg-white rounded-xl border border-slate-200 p-6">
-          <h3 className="font-semibold text-slate-900 mb-4">Sessions & Consultations</h3>
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="font-semibold text-slate-900 mb-4">Sessions by Day</h3>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={sessionData}>
               <defs>
                 <linearGradient id="sessionGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="completedGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis dataKey="day" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
@@ -240,52 +195,27 @@ export default function Overview() {
                 stroke="#818cf8"
                 strokeWidth={2}
                 fill="url(#sessionGradient)"
+                name="Total Sessions"
               />
               <Area
                 type="monotone"
-                dataKey="consultations"
-                stroke="#c084fc"
+                dataKey="completed"
+                stroke="#22c55e"
                 strokeWidth={2}
-                fill="none"
+                fill="url(#completedGradient)"
+                name="Completed"
               />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
-
-        {/* Framework Usage */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h3 className="font-semibold text-slate-900 mb-4">Framework Usage</h3>
-          <ResponsiveContainer width="100%" height={160}>
-            <PieChart>
-              <Pie
-                data={[
-                  { name: 'SWOT', value: 35 },
-                  { name: "Porter's Five", value: 25 },
-                  { name: 'PESTEL', value: 20 },
-                  { name: 'Value Chain', value: 12 },
-                  { name: 'BCG Matrix', value: 8 },
-                ]}
-                cx="50%"
-                cy="50%"
-                innerRadius={40}
-                outerRadius={60}
-                paddingAngle={2}
-                dataKey="value"
-              >
-                <Cell fill="#818cf8" />
-                <Cell fill="#c084fc" />
-                <Cell fill="#f472b6" />
-                <Cell fill="#94a3b8" />
-                <Cell fill="#cbd5e1" />
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex flex-wrap gap-2 justify-center text-xs">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-600" /> SWOT</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" /> Porter's Five</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-pink-400" /> PESTEL</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400" /> Value Chain</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" /> BCG Matrix</span>
+          <div className="flex justify-center gap-6 mt-4 text-xs text-slate-600">
+            <span className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-indigo-400" />
+              Total Sessions
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-green-500" />
+              Completed
+            </span>
           </div>
         </div>
       </div>
@@ -358,95 +288,23 @@ export default function Overview() {
         )}
       </div>
 
-      {/* Bottom Row */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Recent Processes */}
-        <div className="col-span-2 bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-900">Recent Processes</h3>
-            <Link to="/processes" className="text-sm text-slate-900 hover:text-slate-800 font-medium flex items-center gap-1">
-              View All <ArrowRight size={14} />
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {recentProcesses.map((process) => {
-              const status = statusConfig[process.status as keyof typeof statusConfig]
-              return (
-                <div key={process.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center">
-                      <GitBranch size={18} className="text-slate-500" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-slate-900">{process.name}</p>
-                      <p className="text-sm text-slate-500">{process.department}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {process.bottlenecks > 0 && (
-                      <span className="flex items-center gap-1 text-amber-600 text-sm">
-                        <AlertTriangle size={14} />
-                        {process.bottlenecks}
-                      </span>
-                    )}
-                    <span className={clsx('px-2 py-1 rounded text-xs font-medium', status.color)}>
-                      {status.label}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Interview Status */}
-        <InterviewStatus interviewees={interviewees} />
-      </div>
-
-      {/* Top Insights */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-slate-900">Top Insights</h3>
-          <Link to="/insights" className="text-sm text-slate-900 hover:text-slate-800 font-medium flex items-center gap-1">
-            View All Insights <ArrowRight size={14} />
-          </Link>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          {topInsights.map((insight) => (
-            <div key={insight.id} className={clsx('p-4 rounded-lg border', insight.color)}>
-              <div className="flex items-center gap-2 mb-2">
-                <div className={clsx('w-6 h-6 rounded flex items-center justify-center', insight.iconBg)}>
-                  {insight.type === 'bottleneck' && <AlertTriangle size={14} className={insight.iconColor} />}
-                  {insight.type === 'duplicate' && <RefreshCw size={14} className={insight.iconColor} />}
-                  {insight.type === 'improvement' && <Zap size={14} className={insight.iconColor} />}
-                </div>
-                <span className="text-xs font-medium text-slate-500 uppercase">{insight.type}</span>
-              </div>
-              <p className="text-sm font-medium text-slate-900 mb-1">{insight.title}</p>
-              <p className={clsx(
-                'text-xs',
-                insight.type === 'duplicate' ? 'text-red-600' :
-                insight.type === 'improvement' ? 'text-green-600 font-medium' : 'text-slate-500'
-              )}>
-                {insight.context}
-              </p>
-            </div>
-          ))}
-        </div>
+      {/* Bottom Row - Employee Status */}
+      <div className="grid grid-cols-1 gap-6">
+        <EmployeeStatus employees={employees} loading={loading} />
       </div>
 
       {/* CTA Banner */}
       <div className="bg-slate-900 rounded-xl p-6 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Ready to optimize your processes?</h3>
-          <p className="text-slate-200">View detailed insights and recommendations to improve efficiency.</p>
+          <h3 className="text-lg font-semibold text-white">Ready to start outreach?</h3>
+          <p className="text-slate-200">Add employees and send SMS to schedule voice consultations.</p>
         </div>
         <div className="flex gap-3">
-          <Link to="/processes" className="px-4 py-2 bg-white text-slate-900 rounded-lg font-medium hover:bg-slate-50 transition-colors">
-            View Processes
+          <Link to="/employees" className="px-4 py-2 bg-white text-slate-900 rounded-lg font-medium hover:bg-slate-50 transition-colors">
+            Manage Employees
           </Link>
-          <Link to="/insights" className="px-4 py-2 bg-slate-700 text-white rounded-lg font-medium hover:bg-slate-600 transition-colors flex items-center gap-2">
-            See Insights <ArrowRight size={16} />
+          <Link to="/messages" className="px-4 py-2 bg-slate-700 text-white rounded-lg font-medium hover:bg-slate-600 transition-colors flex items-center gap-2">
+            View Messages <ArrowRight size={16} />
           </Link>
         </div>
       </div>
@@ -457,14 +315,12 @@ export default function Overview() {
 interface StatCardProps {
   label: string
   value: string
-  change: string
-  changeType: 'positive' | 'negative'
   icon: LucideIcon
   iconBg: string
   iconColor: string
 }
 
-function StatCard({ label, value, change, changeType, icon: Icon, iconBg, iconColor }: StatCardProps) {
+function StatCard({ label, value, icon: Icon, iconBg, iconColor }: StatCardProps) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       <div className="flex items-start justify-between">
@@ -476,38 +332,40 @@ function StatCard({ label, value, change, changeType, icon: Icon, iconBg, iconCo
           <Icon size={20} className={iconColor} />
         </div>
       </div>
-      <p className={clsx(
-        'text-xs mt-2 flex items-center gap-1',
-        changeType === 'positive' ? 'text-green-600' : 'text-red-600'
-      )}>
-        <TrendingUp size={12} className={changeType === 'negative' ? 'rotate-180' : ''} />
-        {change} vs last week
-      </p>
     </div>
   )
 }
 
-function InterviewStatus({ interviewees }: { interviewees: Interviewee[] }) {
-  const [filter, setFilter] = useState<'all' | 'done' | 'pending'>('all')
+const employeeStatusConfig: Record<string, { label: string; color: string }> = {
+  pending: { label: 'Pending', color: 'bg-amber-50 text-amber-600' },
+  contacted: { label: 'Contacted', color: 'bg-blue-50 text-blue-600' },
+  call_requested: { label: 'Call Requested', color: 'bg-purple-50 text-purple-600' },
+  interviewed: { label: 'Interviewed', color: 'bg-green-50 text-green-600' },
+  declined: { label: 'Declined', color: 'bg-red-50 text-red-600' },
+}
 
-  const completedCount = interviewees.filter(i => i.status === 'done').length
-  const pendingCount = interviewees.filter(i => i.status === 'pending').length
+function EmployeeStatus({ employees, loading }: { employees: Employee[]; loading: boolean }) {
+  const [filter, setFilter] = useState<string>('all')
 
-  const filteredInterviewees = filter === 'all'
-    ? interviewees
-    : interviewees.filter(i => i.status === filter)
+  const interviewedCount = employees.filter(e => e.status === 'interviewed').length
+  const pendingCount = employees.filter(e => e.status === 'pending').length
+  const contactedCount = employees.filter(e => ['contacted', 'call_requested'].includes(e.status)).length
+
+  const filteredEmployees = filter === 'all'
+    ? employees
+    : employees.filter(e => e.status === filter)
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-slate-900">Interview Status</h3>
-        <button className="text-sm text-slate-600 border border-slate-200 px-3 py-1 rounded-lg hover:bg-slate-50">
-          View All
-        </button>
+        <h3 className="font-semibold text-slate-900">Employee Outreach Status</h3>
+        <Link to="/employees" className="text-sm text-slate-600 border border-slate-200 px-3 py-1 rounded-lg hover:bg-slate-50">
+          Manage
+        </Link>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         <button
           onClick={() => setFilter('all')}
           className={clsx(
@@ -517,66 +375,83 @@ function InterviewStatus({ interviewees }: { interviewees: Interviewee[] }) {
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           )}
         >
-          All ({interviewees.length})
-        </button>
-        <button
-          onClick={() => setFilter('done')}
-          className={clsx(
-            'px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
-            filter === 'done'
-              ? 'bg-green-100 text-green-700'
-              : 'bg-green-50 text-green-600 hover:bg-green-100'
-          )}
-        >
-          Completed ({completedCount})
+          All ({employees.length})
         </button>
         <button
           onClick={() => setFilter('pending')}
           className={clsx(
             'px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
             filter === 'pending'
-              ? 'bg-yellow-100 text-yellow-700'
-              : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
           )}
         >
           Pending ({pendingCount})
         </button>
+        <button
+          onClick={() => setFilter('contacted')}
+          className={clsx(
+            'px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
+            filter === 'contacted'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+          )}
+        >
+          In Progress ({contactedCount})
+        </button>
+        <button
+          onClick={() => setFilter('interviewed')}
+          className={clsx(
+            'px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
+            filter === 'interviewed'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-green-50 text-green-600 hover:bg-green-100'
+          )}
+        >
+          Interviewed ({interviewedCount})
+        </button>
       </div>
 
-      {/* Interviewee List */}
-      <div className="space-y-3 max-h-[280px] overflow-y-auto">
-        {filteredInterviewees.map((person, i) => (
-          <div key={i} className="flex items-center justify-between py-2">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
-                <User size={18} className="text-slate-400" />
+      {/* Employee List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 size={24} className="text-slate-400 animate-spin" />
+        </div>
+      ) : filteredEmployees.length === 0 ? (
+        <div className="text-center py-8 text-slate-500">
+          <Users size={32} className="mx-auto mb-2 text-slate-300" />
+          <p>No employees yet</p>
+          <Link to="/employees" className="text-sm text-slate-900 underline mt-1 inline-block">Add employees</Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {filteredEmployees.slice(0, 8).map((employee) => {
+            const status = employeeStatusConfig[employee.status] || employeeStatusConfig.pending
+            return (
+              <div key={employee.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-medium text-slate-700">
+                    {employee.name?.split(' ').map(n => n[0]).join('') || '?'}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-slate-900 truncate">{employee.name}</p>
+                  <span className={clsx('inline-flex items-center gap-1 text-xs font-medium', status.color)}>
+                    {employee.status === 'interviewed' && <CheckCircle2 size={12} />}
+                    {employee.status === 'pending' && <Clock size={12} />}
+                    {status.label}
+                  </span>
+                </div>
               </div>
-              <div>
-                <p className="font-medium text-slate-900">{person.name}</p>
-                <p className="text-sm text-slate-500">{person.department}</p>
-              </div>
-            </div>
-            <span className={clsx(
-              'flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium',
-              person.status === 'done'
-                ? 'bg-green-50 text-green-600'
-                : 'bg-yellow-50 text-yellow-600'
-            )}>
-              {person.status === 'done' ? (
-                <>
-                  <CheckCircle2 size={14} />
-                  Done
-                </>
-              ) : (
-                <>
-                  <Clock size={14} />
-                  Pending
-                </>
-              )}
-            </span>
-          </div>
-        ))}
-      </div>
+            )
+          })}
+        </div>
+      )}
+      {filteredEmployees.length > 8 && (
+        <Link to="/employees" className="block text-center text-sm text-slate-600 mt-4 hover:text-slate-900">
+          View all {filteredEmployees.length} employees
+        </Link>
+      )}
     </div>
   )
 }

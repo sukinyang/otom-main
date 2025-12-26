@@ -126,6 +126,61 @@ async def get_services():
         ]
     }
 
+# Employee endpoints
+@app.get("/employees")
+async def get_employees():
+    """Get all employees"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        return []
+    try:
+        result = supabase.client.table("employees").select("*").order("created_at", desc=True).execute()
+        return result.data or []
+    except Exception as e:
+        logger.error(f"Failed to fetch employees: {e}")
+        return []
+
+@app.get("/employees/{employee_id}")
+async def get_employee(employee_id: str):
+    """Get a single employee"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        result = supabase.client.table("employees").select("*").eq("id", employee_id).single().execute()
+        return result.data
+    except Exception as e:
+        logger.error(f"Failed to fetch employee: {e}")
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+@app.post("/employees")
+async def create_employee(request: Request):
+    """Create a new employee"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        data = await request.json()
+        result = supabase.client.table("employees").insert(data).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error(f"Failed to create employee: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/employees/{employee_id}")
+async def update_employee(employee_id: str, request: Request):
+    """Update an employee"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        data = await request.json()
+        result = supabase.client.table("employees").update(data).eq("id", employee_id).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error(f"Failed to update employee: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include interface routers
 app.include_router(voice_interface.router)
 app.include_router(chat_interface.router)
