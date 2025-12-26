@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
+import ProtectedRoute from './components/ProtectedRoute'
+import Login from './pages/Login'
 import Overview from './pages/Overview'
 import Sessions from './pages/Sessions'
 import Consultations from './pages/Consultations'
@@ -14,7 +16,18 @@ import Settings from './pages/Settings'
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Layout />}>
+      {/* Public route */}
+      <Route path="/login" element={<Login />} />
+
+      {/* Protected routes */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<Navigate to="/overview" replace />} />
         <Route path="overview" element={<Overview />} />
         <Route path="sessions" element={<Sessions />} />

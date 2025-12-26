@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useAuth0 } from '@auth0/auth0-react'
 import {
   LayoutGrid,
   MessageSquare,
@@ -39,6 +40,7 @@ const bottomNavItems = [
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
+  const { logout, user } = useAuth0()
 
   return (
     <aside className={clsx(
@@ -126,7 +128,18 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+        {/* User info */}
+        {user && !collapsed && (
+          <div className="px-3 py-2 mb-2">
+            <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
+            <p className="text-xs text-slate-500 truncate">{user.email}</p>
+          </div>
+        )}
+
+        <button
+          onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+        >
           <LogOut size={20} className="flex-shrink-0" />
           {!collapsed && <span className="text-sm font-medium">Sign Out</span>}
         </button>
