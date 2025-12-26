@@ -45,7 +45,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'https://otom-production-1790.u
 
 export default function Messages() {
   const [messages, setMessages] = useState<SMSMessage[]>([])
-  const [employees, setEmployees] = useState<Employee[]>([])
+  const [_employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterDirection, setFilterDirection] = useState<'all' | 'inbound' | 'outbound'>('all')
