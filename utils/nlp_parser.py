@@ -18,18 +18,18 @@ class NLPParser:
 
     def __init__(self):
         """Initialize NLP parser with spaCy model"""
-        try:
-            # Try to load the model, download if not available
-            self.nlp = spacy.load("en_core_web_sm")
-        except OSError:
-            logger.warning("spaCy model not found. Installing en_core_web_sm...")
-            import subprocess
-            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
-            self.nlp = spacy.load("en_core_web_sm")
+        self.nlp = None
+        self.matcher = None
 
-        # Initialize matcher for pattern matching
-        self.matcher = Matcher(self.nlp.vocab)
-        self._setup_patterns()
+        try:
+            # Try to load the model
+            self.nlp = spacy.load("en_core_web_sm")
+            # Initialize matcher for pattern matching
+            self.matcher = Matcher(self.nlp.vocab)
+            self._setup_patterns()
+        except OSError:
+            logger.warning("spaCy model 'en_core_web_sm' not available - NLP features will be limited")
+            # Fallback: NLP features will use simple regex-based parsing
 
     def _setup_patterns(self):
         """Setup common business patterns for matching"""

@@ -128,7 +128,7 @@ async def get_services():
 # Include interface routers
 app.include_router(voice_interface.router)
 app.include_router(chat_interface.router)
-app.include_router(email_interface.router)
+# Note: EmailInterface doesn't have HTTP routes - it's used for outbound emails only
 
 if __name__ == "__main__":
     logger.info("Starting Otom AI Consultant...")
