@@ -53,5 +53,8 @@ spacy>=3.7.0
 # Graph/Network Analysis
 networkx>=3.0
 
+# Numerical Computing
+numpy>=1.24.0
+
 # Production Server
 gunicorn>=21.0.0
