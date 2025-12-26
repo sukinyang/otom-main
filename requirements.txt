@@ -42,5 +42,13 @@ pydantic-settings>=2.0.0
 # Logging
 structlog>=24.0.0
 
+# PDF/Report Generation
+reportlab>=4.0.0
+matplotlib>=3.7.0
+plotly>=5.18.0
+
+# NLP
+spacy>=3.7.0
+
 # Production Server
 gunicorn>=21.0.0
