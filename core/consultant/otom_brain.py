@@ -10,9 +10,23 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import uuid
 
-from langchain.memory import ConversationBufferWindowMemory
-from langchain.chains import ConversationChain
-from langchain.prompts import PromptTemplate
+# LangChain imports - handle both old and new API
+try:
+    from langchain.memory import ConversationBufferWindowMemory
+except ImportError:
+    from langchain_community.chat_message_histories import ChatMessageHistory
+    # Fallback: we'll implement simple memory ourselves
+    ConversationBufferWindowMemory = None
+
+try:
+    from langchain.chains import ConversationChain
+except ImportError:
+    ConversationChain = None
+
+try:
+    from langchain.prompts import PromptTemplate
+except ImportError:
+    from langchain_core.prompts import PromptTemplate
 from openai import AsyncOpenAI
 import anthropic
 
