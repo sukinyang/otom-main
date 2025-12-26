@@ -5,7 +5,7 @@ Email-related Celery tasks
 from typing import Dict, Any
 import asyncio
 from celery import shared_task
-from otom.utils.logger import setup_logger
+from utils.logger import setup_logger
 
 logger = setup_logger("email_tasks")
 
@@ -16,8 +16,8 @@ def process_email_consultation(session_id: str, email_data: Dict[str, Any]) -> D
     Process email consultation in background
     """
     try:
-        from otom.interfaces.email.email_handler import EmailInterface
-        from otom.core.consultant.otom_brain import OtomConsultant
+        from interfaces.email.email_handler import EmailInterface
+        from core.consultant.otom_brain import OtomConsultant
 
         # Create async event loop for task
         loop = asyncio.new_event_loop()
@@ -48,7 +48,7 @@ def generate_email_report(session_id: str, report_type: str) -> str:
     Generate report for email consultation
     """
     try:
-        from otom.core.deliverables.report_generator import ReportGenerator
+        from core.deliverables.report_generator import ReportGenerator
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -76,7 +76,7 @@ def process_pending_emails():
     Process any pending email consultations (periodic task)
     """
     try:
-        from otom.integrations.supabase_mcp import SupabaseMCP
+        from integrations.supabase_mcp import SupabaseMCP
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -115,8 +115,8 @@ def send_followup_email(session_id: str, followup_type: str) -> bool:
     Send follow-up email for consultation
     """
     try:
-        from otom.interfaces.email.email_handler import EmailInterface
-        from otom.core.consultant.otom_brain import OtomConsultant
+        from interfaces.email.email_handler import EmailInterface
+        from core.consultant.otom_brain import OtomConsultant
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

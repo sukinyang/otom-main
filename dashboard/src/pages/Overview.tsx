@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -11,10 +11,11 @@ import {
   TrendingUp,
   Phone,
   MessageSquare,
-  Mail,
   CheckCircle2,
-  User
+  User,
+  Loader2
 } from 'lucide-react'
+import { api, CallSession, CallStats } from '../services/api'
 import {
   PieChart,
   Pie,
@@ -92,11 +93,34 @@ const sessionData = [
   { day: 'Sun', sessions: 2, consultations: 1 },
 ]
 
-const recentSessions = [
-  { client: 'Acme Corp', type: 'voice', duration: '45 min', status: 'completed', time: '2 hours ago' },
-  { client: 'TechStart Inc', type: 'chat', duration: '30 min', status: 'active', time: '5 min ago' },
-  { client: 'Global Ventures', type: 'voice', duration: '1h 15min', status: 'completed', time: '4 hours ago' },
-]
+function formatDuration(seconds?: number): string {
+  if (!seconds) return '-'
+  const mins = Math.floor(seconds / 60)
+  if (mins > 60) {
+    const hours = Math.floor(mins / 60)
+    const remainingMins = mins % 60
+    return `${hours}h ${remainingMins}m`
+  }
+  return `${mins} min`
+}
+
+function formatTimeAgo(dateString: string): string {
+  try {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins} min ago`
+    if (diffHours < 24) return `${diffHours} hours ago`
+    return `${diffDays} days ago`
+  } catch {
+    return dateString
+  }
+}
 
 const statusConfig = {
   active: { label: 'Active', color: 'bg-blue-100 text-blue-700' },
@@ -105,13 +129,34 @@ const statusConfig = {
   completed: { label: 'completed', color: 'bg-green-100 text-green-700' },
 }
 
-const typeIcons = {
-  voice: Phone,
-  chat: MessageSquare,
-  email: Mail,
-}
 
 export default function Overview() {
+  const [stats, setStats] = useState<CallStats | null>(null)
+  const [recentCalls, setRecentCalls] = useState<CallSession[]>([])
+  const [loading, setLoading] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  async function fetchData() {
+    try {
+      setLoading(true)
+      const [statsResponse, callsResponse] = await Promise.all([
+        api.getCallStats(),
+        api.getCallSessions({ limit: 5 })
+      ])
+      setStats(statsResponse)
+      setRecentCalls(callsResponse.calls)
+      setLastUpdated(new Date())
+    } catch (err) {
+      console.error('Failed to fetch overview data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -119,14 +164,25 @@ export default function Overview() {
         <div>
           <p className="text-slate-600">Monitor your consulting sessions and analytics</p>
         </div>
-        <p className="text-sm text-slate-500">Last updated: Just now</p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-slate-500">
+            Last updated: {lastUpdated.toLocaleTimeString()}
+          </p>
+          <button
+            onClick={fetchData}
+            className="p-1.5 hover:bg-slate-100 rounded transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw size={16} className={clsx('text-slate-500', loading && 'animate-spin')} />
+          </button>
+        </div>
       </div>
 
       {/* Stats Row */}
       <div className="grid grid-cols-4 gap-4">
         <StatCard
           label="Total Sessions"
-          value="156"
+          value={loading ? '...' : String(stats?.total_calls || 0)}
           change="+12%"
           changeType="positive"
           icon={Phone}
@@ -135,7 +191,7 @@ export default function Overview() {
         />
         <StatCard
           label="Active Consultations"
-          value="24"
+          value={loading ? '...' : String(stats?.active_calls || 0)}
           change="+8%"
           changeType="positive"
           icon={MessageSquare}
@@ -144,16 +200,16 @@ export default function Overview() {
         />
         <StatCard
           label="Avg. Duration"
-          value="42 min"
+          value={loading ? '...' : (stats?.avg_duration_formatted || '0m')}
           change="-5%"
           changeType="negative"
           icon={Clock}
-          iconBg="bg-red-100"
-          iconColor="text-red-600"
+          iconBg="bg-purple-100"
+          iconColor="text-purple-600"
         />
         <StatCard
           label="Completion Rate"
-          value="94%"
+          value={loading ? '...' : `${stats?.completion_rate || 0}%`}
           change="+3%"
           changeType="positive"
           icon={TrendingUp}
@@ -242,48 +298,64 @@ export default function Overview() {
             View all
           </Link>
         </div>
-        <table className="w-full">
-          <thead>
-            <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
-              <th className="pb-3 font-medium">Client</th>
-              <th className="pb-3 font-medium">Type</th>
-              <th className="pb-3 font-medium">Duration</th>
-              <th className="pb-3 font-medium">Status</th>
-              <th className="pb-3 font-medium">Time</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm">
-            {recentSessions.map((session, i) => {
-              const TypeIcon = typeIcons[session.type as keyof typeof typeIcons]
-              const status = statusConfig[session.status as keyof typeof statusConfig]
-              return (
-                <tr key={i} className="border-b border-slate-50 last:border-0">
-                  <td className="py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                        <Users size={14} className="text-slate-500" />
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 size={24} className="text-slate-400 animate-spin" />
+          </div>
+        ) : recentCalls.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-slate-500">
+            <Phone size={32} className="text-slate-300 mb-2" />
+            <p>No recent sessions</p>
+            <p className="text-sm text-slate-400">Call data will appear here once calls are made</p>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
+                <th className="pb-3 font-medium">Phone Number</th>
+                <th className="pb-3 font-medium">Type</th>
+                <th className="pb-3 font-medium">Duration</th>
+                <th className="pb-3 font-medium">Status</th>
+                <th className="pb-3 font-medium">Time</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {recentCalls.map((call) => {
+                const TypeIcon = Phone
+                const callStatus = call.status === 'completed'
+                  ? statusConfig.completed
+                  : call.status === 'in-progress' || call.status === 'connecting'
+                  ? statusConfig.active
+                  : statusConfig.active
+                return (
+                  <tr key={call.id} className="border-b border-slate-50 last:border-0">
+                    <td className="py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                          <Users size={14} className="text-slate-500" />
+                        </div>
+                        <span className="font-medium text-slate-900">{call.phone_number}</span>
                       </div>
-                      <span className="font-medium text-slate-900">{session.client}</span>
-                    </div>
-                  </td>
-                  <td className="py-3">
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 rounded text-xs text-slate-600">
-                      <TypeIcon size={12} />
-                      {session.type.charAt(0).toUpperCase() + session.type.slice(1)}
-                    </span>
-                  </td>
-                  <td className="py-3 text-slate-600">{session.duration}</td>
-                  <td className="py-3">
-                    <span className={clsx('px-2 py-1 rounded text-xs font-medium', status.color)}>
-                      {status.label}
-                    </span>
-                  </td>
-                  <td className="py-3 text-slate-500">{session.time}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td className="py-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 rounded text-xs text-slate-600">
+                        <TypeIcon size={12} />
+                        Voice
+                      </span>
+                    </td>
+                    <td className="py-3 text-slate-600">{formatDuration(call.duration_seconds)}</td>
+                    <td className="py-3">
+                      <span className={clsx('px-2 py-1 rounded text-xs font-medium', callStatus.color)}>
+                        {call.status}
+                      </span>
+                    </td>
+                    <td className="py-3 text-slate-500">{formatTimeAgo(call.started_at || call.created_at)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Bottom Row */}

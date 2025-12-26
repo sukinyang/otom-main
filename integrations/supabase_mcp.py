@@ -14,7 +14,7 @@ import uuid
 from supabase import create_client, Client
 from supabase.lib.client_options import ClientOptions
 
-from otom.utils.logger import setup_logger
+from utils.logger import setup_logger
 
 logger = setup_logger("supabase")
 

@@ -1,0 +1,77 @@
+# Otom - Docker Compose for local development and production
+version: '3.8'
+
+services:
+  # Main Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Celery Worker (for background tasks)
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A core.tasks.celery_config worker --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - backend
+    restart: always
+
+  # Celery Beat (for scheduled tasks)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A core.tasks.celery_config beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - backend
+    restart: always
+
+  # Redis (message broker for Celery)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:

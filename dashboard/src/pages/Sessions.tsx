@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Search,
   Phone,
@@ -7,85 +7,14 @@ import {
   Clock,
   Calendar,
   MoreVertical,
-  Play
+  Play,
+  Loader2,
+  AlertCircle,
+  PhoneIncoming,
+  PhoneOutgoing
 } from 'lucide-react'
 import clsx from 'clsx'
-
-interface Session {
-  id: string
-  client: string
-  email: string
-  description: string
-  date: string
-  time: string
-  duration: string
-  type: 'voice' | 'chat' | 'email'
-  status: 'completed' | 'active' | 'pending'
-  frameworks: string[]
-}
-
-const sessions: Session[] = [
-  {
-    id: '1',
-    client: 'Acme Corporation',
-    email: 'john@acme.com',
-    description: 'Initial SWOT analysis consultation for market expansion strategy',
-    date: 'Jan 15, 10:30 AM',
-    time: '10:30 AM',
-    duration: '45m',
-    type: 'voice',
-    status: 'completed',
-    frameworks: ['SWOT', "Porter's Five Forces"]
-  },
-  {
-    id: '2',
-    client: 'TechStart Inc',
-    email: 'sarah@techstart.io',
-    description: 'Discussing competitive landscape analysis',
-    date: 'Jan 15, 02:00 PM',
-    time: '02:00 PM',
-    duration: '30m',
-    type: 'chat',
-    status: 'active',
-    frameworks: ["Porter's Five Forces"]
-  },
-  {
-    id: '3',
-    client: 'Global Ventures',
-    email: 'mike@globalventures.com',
-    description: 'Comprehensive business strategy review and process mapping',
-    date: 'Jan 14, 09:00 AM',
-    time: '09:00 AM',
-    duration: '1h 15m',
-    type: 'voice',
-    status: 'completed',
-    frameworks: ['SWOT', 'PESTEL', 'Value Chain']
-  },
-  {
-    id: '4',
-    client: 'Innovation Labs',
-    email: 'alex@innovationlabs.com',
-    description: 'Follow-up on market research findings',
-    date: 'Jan 14, 03:00 PM',
-    time: '03:00 PM',
-    duration: '20m',
-    type: 'email',
-    status: 'pending',
-    frameworks: ['SWOT']
-  },
-  {
-    id: '5',
-    client: 'RetailMax',
-    email: 'lisa@retailmax.com',
-    description: 'Supply chain optimization discussion',
-    date: 'Jan 13, 11:00 AM',
-    time: '11:00 AM',
-    duration: '55m',
-    type: 'voice',
-    status: 'completed',
-    frameworks: ['Value Chain', 'PESTEL']
-  },
-]
+import { api, CallSession } from '../services/api'
 
 const typeConfig = {
   voice: { icon: Phone, color: 'bg-green-100 text-green-600' },
@@ -95,23 +24,84 @@ const typeConfig = {
 
 const statusConfig = {
   completed: { label: 'completed', color: 'bg-green-100 text-green-700' },
-  active: { label: 'active', color: 'bg-blue-100 text-blue-700' },
-  pending: { label: 'pending', color: 'bg-amber-100 text-amber-700' },
+  'in-progress': { label: 'active', color: 'bg-blue-100 text-blue-700' },
+  connecting: { label: 'connecting', color: 'bg-amber-100 text-amber-700' },
+  initiated: { label: 'pending', color: 'bg-amber-100 text-amber-700' },
+  failed: { label: 'failed', color: 'bg-red-100 text-red-700' },
+}
+
+function formatDuration(seconds?: number): string {
+  if (!seconds) return '-'
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  if (mins > 60) {
+    const hours = Math.floor(mins / 60)
+    const remainingMins = mins % 60
+    return `${hours}h ${remainingMins}m`
+  }
+  return `${mins}m ${secs}s`
+}
+
+function formatDate(dateString: string): string {
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  } catch {
+    return dateString
+  }
 }
 
 export default function Sessions() {
-  const [filterType, setFilterType] = useState<'all' | 'voice' | 'chat' | 'email'>('all')
+  const [filterType] = useState<'all' | 'voice' | 'chat' | 'email'>('all')
+  const [filterStatus, setFilterStatus] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [calls, setCalls] = useState<CallSession[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filteredSessions = sessions.filter(s => {
-    if (filterType !== 'all' && s.type !== filterType) return false
-    if (searchQuery && !s.client.toLowerCase().includes(searchQuery.toLowerCase())) return false
+  useEffect(() => {
+    fetchCalls()
+  }, [])
+
+  async function fetchCalls() {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await api.getCallSessions({ limit: 100 })
+      setCalls(response.calls)
+    } catch (err) {
+      setError('Failed to load call sessions. Make sure the backend is running.')
+      console.error('Failed to fetch calls:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredCalls = calls.filter(call => {
+    // For now, all calls are voice type since we're fetching from voice/calls
+    if (filterType !== 'all' && filterType !== 'voice') return false
+    if (filterStatus !== 'all' && call.status !== filterStatus) return false
+    if (searchQuery && !call.phone_number.toLowerCase().includes(searchQuery.toLowerCase())) return false
     return true
   })
 
-  const voiceCalls = sessions.filter(s => s.type === 'voice').length
-  const chatSessions = sessions.filter(s => s.type === 'chat').length
-  const emailThreads = sessions.filter(s => s.type === 'email').length
+  const voiceCalls = calls.length
+  const completedCalls = calls.filter(c => c.status === 'completed').length
+  const activeCalls = calls.filter(c => ['connecting', 'in-progress', 'initiated'].includes(c.status)).length
+
+  // Calculate average duration
+  const durations = calls
+    .filter(c => c.duration_seconds)
+    .map(c => c.duration_seconds!)
+  const avgDuration = durations.length > 0
+    ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+    : 0
 
   return (
     <div className="space-y-6">
@@ -135,8 +125,8 @@ export default function Sessions() {
               <Phone size={20} className="text-green-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{voiceCalls * 12}</p>
-              <p className="text-sm text-slate-500">Voice Calls</p>
+              <p className="text-2xl font-bold text-slate-900">{voiceCalls}</p>
+              <p className="text-sm text-slate-500">Total Calls</p>
             </div>
           </div>
         </div>
@@ -146,8 +136,8 @@ export default function Sessions() {
               <MessageSquare size={20} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{chatSessions * 18}</p>
-              <p className="text-sm text-slate-500">Chat Sessions</p>
+              <p className="text-2xl font-bold text-slate-900">{activeCalls}</p>
+              <p className="text-sm text-slate-500">Active Sessions</p>
             </div>
           </div>
         </div>
@@ -157,8 +147,8 @@ export default function Sessions() {
               <Mail size={20} className="text-amber-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{emailThreads * 12}</p>
-              <p className="text-sm text-slate-500">Email Threads</p>
+              <p className="text-2xl font-bold text-slate-900">{completedCalls}</p>
+              <p className="text-sm text-slate-500">Completed</p>
             </div>
           </div>
         </div>
@@ -168,7 +158,7 @@ export default function Sessions() {
               <Clock size={20} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">42m</p>
+              <p className="text-2xl font-bold text-slate-900">{formatDuration(avgDuration)}</p>
               <p className="text-sm text-slate-500">Avg Duration</p>
             </div>
           </div>
@@ -184,105 +174,129 @@ export default function Sessions() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search sessions..."
+              placeholder="Search by phone number..."
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-700"
             />
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setFilterType('all')}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                filterType === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              )}
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 border-0 focus:ring-2 focus:ring-slate-700"
             >
-              All
-            </button>
+              <option value="all">All Status</option>
+              <option value="completed">Completed</option>
+              <option value="in-progress">Active</option>
+              <option value="connecting">Connecting</option>
+              <option value="failed">Failed</option>
+            </select>
             <button
-              onClick={() => setFilterType('voice')}
-              className={clsx(
-                'flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                filterType === 'voice' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              )}
+              onClick={fetchCalls}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
             >
-              <Phone size={14} />
-              Voice
-            </button>
-            <button
-              onClick={() => setFilterType('chat')}
-              className={clsx(
-                'flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                filterType === 'chat' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              )}
-            >
-              <MessageSquare size={14} />
-              Chat
-            </button>
-            <button
-              onClick={() => setFilterType('email')}
-              className={clsx(
-                'flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                filterType === 'email' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              )}
-            >
-              <Mail size={14} />
-              Email
+              Refresh
             </button>
           </div>
         </div>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 flex flex-col items-center justify-center">
+          <Loader2 size={32} className="text-slate-400 animate-spin mb-3" />
+          <p className="text-slate-500">Loading call sessions...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-red-50 rounded-xl border border-red-200 p-6 flex items-center gap-4">
+          <AlertCircle size={24} className="text-red-500" />
+          <div>
+            <p className="font-medium text-red-700">{error}</p>
+            <button
+              onClick={fetchCalls}
+              className="text-sm text-red-600 hover:text-red-700 underline mt-1"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && filteredCalls.length === 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 flex flex-col items-center justify-center">
+          <Phone size={48} className="text-slate-300 mb-3" />
+          <p className="text-slate-500 font-medium">No call sessions found</p>
+          <p className="text-slate-400 text-sm">Call sessions will appear here once calls are made via Vapi</p>
+        </div>
+      )}
+
       {/* Sessions List */}
-      <div className="space-y-3">
-        {filteredSessions.map((session) => {
-          const type = typeConfig[session.type]
-          const TypeIcon = type.icon
-          const status = statusConfig[session.status]
-          return (
-            <div key={session.id} className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition-shadow cursor-pointer">
-              <div className="flex items-start gap-4">
-                <div className={clsx('w-12 h-12 rounded-lg flex items-center justify-center', type.color)}>
-                  <TypeIcon size={24} />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <div>
-                      <h3 className="font-semibold text-slate-900">{session.client}</h3>
-                      <p className="text-sm text-slate-500">{session.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={clsx('px-2 py-1 rounded text-xs font-medium', status.color)}>
-                        {status.label}
-                      </span>
-                      <button className="p-1 hover:bg-slate-100 rounded transition-colors">
-                        <MoreVertical size={16} className="text-slate-400" />
-                      </button>
-                    </div>
+      {!loading && !error && filteredCalls.length > 0 && (
+        <div className="space-y-3">
+          {filteredCalls.map((call) => {
+            const type = typeConfig.voice
+            const TypeIcon = type.icon
+            const status = statusConfig[call.status as keyof typeof statusConfig] || statusConfig.initiated
+            const DirectionIcon = call.direction === 'inbound' ? PhoneIncoming : PhoneOutgoing
+
+            return (
+              <div key={call.id} className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-start gap-4">
+                  <div className={clsx('w-12 h-12 rounded-lg flex items-center justify-center', type.color)}>
+                    <TypeIcon size={24} />
                   </div>
-                  <p className="text-sm text-slate-600 mb-2">{session.description}</p>
-                  <div className="flex items-center gap-4 text-xs text-slate-500">
-                    <span className="flex items-center gap-1">
-                      <Calendar size={12} />
-                      {session.date}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock size={12} />
-                      {session.duration}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {session.frameworks.map((fw) => (
-                        <span key={fw} className="px-2 py-0.5 bg-slate-100 rounded text-slate-600">
-                          {fw}
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-slate-900">{call.phone_number}</h3>
+                          <DirectionIcon size={14} className="text-slate-400" />
+                          <span className="text-xs text-slate-400">{call.direction}</span>
+                        </div>
+                        <p className="text-sm text-slate-500">
+                          {call.vapi_call_id ? `Call ID: ${call.vapi_call_id.slice(0, 8)}...` : 'Voice consultation'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={clsx('px-2 py-1 rounded text-xs font-medium', status.color)}>
+                          {status.label}
                         </span>
-                      ))}
+                        <button className="p-1 hover:bg-slate-100 rounded transition-colors">
+                          <MoreVertical size={16} className="text-slate-400" />
+                        </button>
+                      </div>
+                    </div>
+                    {call.summary && (
+                      <p className="text-sm text-slate-600 mb-2 line-clamp-2">{call.summary}</p>
+                    )}
+                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar size={12} />
+                        {formatDate(call.started_at || call.created_at)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} />
+                        {formatDuration(call.duration_seconds)}
+                      </span>
+                      {call.cost && (
+                        <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600">
+                          ${call.cost.toFixed(2)}
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-600">
+                        {call.platform}
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -17,11 +17,11 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
 import base64
 
-from otom.utils.logger import setup_logger
-from otom.utils.nlp_parser import NLPParser
+from utils.logger import setup_logger
+from utils.nlp_parser import NLPParser
 
 try:
-    from otom.core.tasks.email_tasks import process_email_consultation
+    from core.tasks.email_tasks import process_email_consultation
     CELERY_ENABLED = True
 except ImportError:
     CELERY_ENABLED = False

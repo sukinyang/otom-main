@@ -17,8 +17,8 @@ import aiohttp
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Request, Header
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from otom.utils.logger import setup_logger
-from otom.integrations.supabase_mcp import supabase
+from utils.logger import setup_logger
+from integrations.supabase_mcp import supabase
 
 logger = setup_logger("chat_handler")
 

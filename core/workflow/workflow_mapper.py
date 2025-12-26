@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import networkx as nx
 import numpy as np
 
-from otom.utils.logger import setup_logger
+from utils.logger import setup_logger
 
 logger = setup_logger("workflow_mapper")
 

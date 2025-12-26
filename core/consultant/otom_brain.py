@@ -16,12 +16,12 @@ from langchain.prompts import PromptTemplate
 from openai import AsyncOpenAI
 import anthropic
 
-from otom.core.frameworks.framework_engine import FrameworkEngine
-from otom.core.research.market_researcher import MarketResearcher
-from otom.core.deliverables.report_generator import ReportGenerator
-from otom.core.workflow.workflow_mapper import WorkflowMapper
-from otom.core.workflow.questionnaire_engine import QuestionnaireEngine
-from otom.utils.logger import setup_logger
+from core.frameworks.framework_engine import FrameworkEngine
+from core.research.market_researcher import MarketResearcher
+from core.deliverables.report_generator import ReportGenerator
+from core.workflow.workflow_mapper import WorkflowMapper
+from core.workflow.questionnaire_engine import QuestionnaireEngine
+from utils.logger import setup_logger
 
 logger = setup_logger("otom_brain")
 

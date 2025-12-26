@@ -8,7 +8,7 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 import asyncio
 
-from otom.utils.logger import setup_logger
+from utils.logger import setup_logger
 
 logger = setup_logger("framework_engine")
 

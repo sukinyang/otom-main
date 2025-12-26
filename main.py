@@ -10,11 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import uvicorn
 
-from otom.core.consultant.otom_brain import OtomConsultant
-from otom.interfaces.voice.voice_handler import VoiceInterface
-from otom.interfaces.chat.chat_handler import ChatInterface
-from otom.interfaces.email.email_handler import EmailInterface
-from otom.utils.logger import setup_logger
+from core.consultant.otom_brain import OtomConsultant
+from interfaces.voice.voice_handler import VoiceInterface
+from interfaces.chat.chat_handler import ChatInterface
+from interfaces.email.email_handler import EmailInterface
+from utils.logger import setup_logger
 
 # Load environment variables
 load_dotenv()

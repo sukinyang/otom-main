@@ -14,8 +14,8 @@ import aiohttp
 from fastapi import APIRouter, Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 
-from otom.utils.logger import setup_logger
-from otom.integrations.supabase_mcp import supabase
+from utils.logger import setup_logger
+from integrations.supabase_mcp import supabase
 
 logger = setup_logger("voice_handler")
 
@@ -55,6 +55,92 @@ class VoiceInterface:
 
     def _setup_routes(self):
         """Setup Vapi webhook routes"""
+
+        # ==========================================
+        # API ENDPOINTS FOR DASHBOARD
+        # ==========================================
+
+        @self.router.get("/calls")
+        async def list_calls(
+            limit: int = 50,
+            status: str = None,
+            phone_number: str = None
+        ):
+            """
+            List all call sessions with optional filters.
+            Used by dashboard to display call history.
+            """
+            try:
+                calls = await supabase.list_call_sessions(
+                    phone_number=phone_number,
+                    status=status,
+                    limit=limit
+                )
+                return {"calls": calls, "total": len(calls)}
+            except Exception as e:
+                logger.error(f"Failed to list calls: {str(e)}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.router.get("/calls/stats")
+        async def get_call_stats(days: int = 30):
+            """
+            Get call statistics for dashboard overview.
+            Returns aggregated metrics about calls.
+            """
+            try:
+                # Get all calls for the period
+                calls = await supabase.list_call_sessions(limit=1000)
+
+                # Calculate statistics
+                total_calls = len(calls)
+                completed_calls = [c for c in calls if c.get("status") == "completed"]
+                active_calls = [c for c in calls if c.get("status") in ["connecting", "in-progress", "initiated"]]
+
+                # Calculate average duration
+                durations = [c.get("duration_seconds", 0) for c in completed_calls if c.get("duration_seconds")]
+                avg_duration = sum(durations) / len(durations) if durations else 0
+
+                # Calculate completion rate
+                completion_rate = (len(completed_calls) / total_calls * 100) if total_calls > 0 else 0
+
+                # Get calls by direction
+                inbound_calls = len([c for c in calls if c.get("direction") == "inbound"])
+                outbound_calls = len([c for c in calls if c.get("direction") == "outbound"])
+
+                return {
+                    "total_calls": total_calls,
+                    "completed_calls": len(completed_calls),
+                    "active_calls": len(active_calls),
+                    "avg_duration_seconds": round(avg_duration, 1),
+                    "avg_duration_formatted": f"{int(avg_duration // 60)}m {int(avg_duration % 60)}s" if avg_duration > 0 else "0m",
+                    "completion_rate": round(completion_rate, 1),
+                    "inbound_calls": inbound_calls,
+                    "outbound_calls": outbound_calls
+                }
+            except Exception as e:
+                logger.error(f"Failed to get call stats: {str(e)}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.router.get("/calls/{session_id}")
+        async def get_call(session_id: str):
+            """
+            Get a single call session by ID.
+            Returns full call details including transcript.
+            """
+            try:
+                call = await supabase.get_call_session(session_id)
+                if not call:
+                    raise HTTPException(status_code=404, detail="Call session not found")
+                return call
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get call: {str(e)}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        # ==========================================
+        # VAPI WEBHOOK ROUTES
+        # ==========================================
 
         @self.router.post("/vapi/webhook")
         async def vapi_webhook(request: Request):

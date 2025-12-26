@@ -9,7 +9,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from enum import Enum
 
-from otom.utils.logger import setup_logger
+from utils.logger import setup_logger
 
 logger = setup_logger("questionnaire_engine")
 

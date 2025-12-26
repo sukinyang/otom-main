@@ -27,7 +27,7 @@ except ImportError:
     sns = None
     nx = None
 
-from otom.utils.logger import setup_logger
+from utils.logger import setup_logger
 
 logger = setup_logger("report_generator")
 

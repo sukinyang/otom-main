@@ -8,7 +8,7 @@ from typing import Dict, List, Any, Optional
 import spacy
 from spacy.matcher import Matcher
 
-from otom.utils.logger import setup_logger
+from utils.logger import setup_logger
 
 logger = setup_logger("nlp_parser")
 

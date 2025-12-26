@@ -11,7 +11,7 @@ from datetime import datetime
 import aiohttp
 from bs4 import BeautifulSoup
 
-from otom.utils.logger import setup_logger
+from utils.logger import setup_logger
 
 logger = setup_logger("market_researcher")
 

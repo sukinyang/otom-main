@@ -21,6 +21,35 @@ export interface Service {
   deliverables: string[]
 }
 
+export interface CallSession {
+  id: string
+  vapi_call_id?: string
+  phone_number: string
+  direction: 'inbound' | 'outbound'
+  status: 'initiated' | 'connecting' | 'in-progress' | 'completed' | 'failed'
+  platform: string
+  transcript?: string
+  summary?: string
+  duration_seconds?: number
+  cost?: number
+  metadata?: Record<string, unknown>
+  started_at: string
+  ended_at?: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface CallStats {
+  total_calls: number
+  completed_calls: number
+  active_calls: number
+  avg_duration_seconds: number
+  avg_duration_formatted: string
+  completion_rate: number
+  inbound_calls: number
+  outbound_calls: number
+}
+
 class ApiService {
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -103,6 +132,27 @@ class ApiService {
       messages: Message[]
       started_at: string
     }>(`/chat/session/${sessionId}/history`)
+  }
+
+  // Voice Calls
+  async getCallSessions(params?: { limit?: number; status?: string; phone_number?: string }) {
+    const searchParams = new URLSearchParams()
+    if (params?.limit) searchParams.set('limit', params.limit.toString())
+    if (params?.status) searchParams.set('status', params.status)
+    if (params?.phone_number) searchParams.set('phone_number', params.phone_number)
+
+    const query = searchParams.toString()
+    return this.fetch<{ calls: CallSession[]; total: number }>(
+      `/voice/calls${query ? `?${query}` : ''}`
+    )
+  }
+
+  async getCallSession(sessionId: string) {
+    return this.fetch<CallSession>(`/voice/calls/${sessionId}`)
+  }
+
+  async getCallStats(days = 30) {
+    return this.fetch<CallStats>(`/voice/calls/stats?days=${days}`)
   }
 }
 
