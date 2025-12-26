@@ -50,5 +50,8 @@ plotly>=5.18.0
 # NLP
 spacy>=3.7.0
 
+# Graph/Network Analysis
+networkx>=3.0
+
 # Production Server
 gunicorn>=21.0.0
