@@ -44,8 +44,21 @@ class OtomConsultant:
 
     def __init__(self):
         """Initialize Otom with all necessary components"""
-        self.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.anthropic_client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        # Initialize AI clients - handle missing API keys gracefully
+        openai_key = os.getenv("OPENAI_API_KEY")
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+
+        if openai_key:
+            self.openai_client = AsyncOpenAI(api_key=openai_key)
+        else:
+            logger.warning("OPENAI_API_KEY not set - OpenAI features will be unavailable")
+            self.openai_client = None
+
+        if anthropic_key:
+            self.anthropic_client = anthropic.AsyncAnthropic(api_key=anthropic_key)
+        else:
+            logger.warning("ANTHROPIC_API_KEY not set - Anthropic features will be unavailable")
+            self.anthropic_client = None
 
         # Initialize components
         self.framework_engine = FrameworkEngine()
@@ -58,10 +71,16 @@ class OtomConsultant:
         self.active_sessions = {}
 
         # Conversation memory (2-minute context window like Sesame)
-        self.memory = ConversationBufferWindowMemory(
-            k=10,  # Keep last 10 exchanges
-            return_messages=True
-        )
+        if ConversationBufferWindowMemory:
+            self.memory = ConversationBufferWindowMemory(
+                k=10,  # Keep last 10 exchanges
+                return_messages=True
+            )
+        else:
+            # Fallback: use simple in-memory conversation history
+            self.memory = None
+            self._conversation_history = []
+            logger.warning("LangChain memory not available - using simple memory")
 
         # Otom's personality and expertise
         self.consultant_prompt = PromptTemplate(
