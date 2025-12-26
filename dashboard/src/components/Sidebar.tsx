@@ -8,6 +8,7 @@ import {
   GitBranch,
   Lightbulb,
   Users,
+  MessageCircle,
   Settings,
   HelpCircle,
   LogOut,
@@ -28,6 +29,7 @@ const secondaryNavItems = [
   { path: '/processes', label: 'Processes', icon: GitBranch },
   { path: '/insights', label: 'Insights', icon: Lightbulb },
   { path: '/employees', label: 'Employees', icon: Users },
+  { path: '/messages', label: 'Messages', icon: MessageCircle },
 ]
 
 const bottomNavItems = [

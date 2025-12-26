@@ -438,3 +438,38 @@ async def bulk_outreach(request: Request):
     except Exception as e:
         logger.error(f"Bulk outreach error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/messages")
+async def get_messages(limit: int = 100):
+    """Get SMS message history"""
+    try:
+        if not supabase.client:
+            return []
+
+        # Fetch messages with employee info
+        result = await supabase.client.table("sms_messages").select(
+            "*, employees(name)"
+        ).order("created_at", desc=True).limit(limit).execute()
+
+        messages = []
+        for msg in result.data or []:
+            employee_name = None
+            if msg.get("employees"):
+                employee_name = msg["employees"].get("name")
+            messages.append({
+                "id": msg.get("id"),
+                "employee_id": msg.get("employee_id"),
+                "phone_number": msg.get("phone_number"),
+                "direction": msg.get("direction"),
+                "message": msg.get("message"),
+                "status": msg.get("status"),
+                "created_at": msg.get("created_at"),
+                "employee_name": employee_name
+            })
+
+        return messages
+
+    except Exception as e:
+        logger.error(f"Get messages error: {str(e)}")
+        return []

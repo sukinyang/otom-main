@@ -8,6 +8,7 @@ import Reports from './pages/Reports'
 import Processes from './pages/Processes'
 import Insights from './pages/Insights'
 import Employees from './pages/Employees'
+import Messages from './pages/Messages'
 import Settings from './pages/Settings'
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
         <Route path="processes" element={<Processes />} />
         <Route path="insights" element={<Insights />} />
         <Route path="employees" element={<Employees />} />
+        <Route path="messages" element={<Messages />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
