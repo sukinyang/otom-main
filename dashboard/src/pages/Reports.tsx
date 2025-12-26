@@ -1,88 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Search,
   FileText,
   Download,
-  Eye,
   Calendar,
-  Clock,
   CheckCircle2,
   Loader2,
   FileBarChart
 } from 'lucide-react'
 import clsx from 'clsx'
+import { api, Report } from '../services/api'
 
-interface Report {
-  id: string
-  title: string
-  client: string
-  type: 'comprehensive' | 'swot' | 'porters' | 'pestel' | 'process_map'
-  date: string
-  pages: number
-  size: string
-  status: 'ready' | 'generating' | 'delivered'
-  frameworks: string[]
-}
-
-const reports: Report[] = [
-  {
-    id: '1',
-    title: 'Strategic Analysis Report - Acme Corp',
-    client: 'Acme Corporation',
-    type: 'comprehensive',
-    date: 'Jan 14, 2024',
-    pages: 24,
-    size: '2.4 MB',
-    status: 'ready',
-    frameworks: ['SWOT', "Porter's Five Forces", 'PESTEL']
-  },
-  {
-    id: '2',
-    title: 'SWOT Analysis - TechStart Inc',
-    client: 'TechStart Inc',
-    type: 'swot',
-    date: 'Jan 13, 2024',
-    pages: 12,
-    size: '1.2 MB',
-    status: 'ready',
-    frameworks: ['SWOT']
-  },
-  {
-    id: '3',
-    title: 'Market Entry Analysis - Global Ventures',
-    client: 'Global Ventures',
-    type: 'porters',
-    date: 'Jan 11, 2024',
-    pages: 0,
-    size: '',
-    status: 'generating',
-    frameworks: ["Porter's Five Forces"]
-  },
-  {
-    id: '4',
-    title: 'Process Optimization Report - Innovation Labs',
-    client: 'Innovation Labs',
-    type: 'process_map',
-    date: 'Jan 9, 2024',
-    pages: 32,
-    size: '3.1 MB',
-    status: 'ready',
-    frameworks: ['Process Map']
-  },
-  {
-    id: '5',
-    title: 'PESTEL Analysis - RetailMax',
-    client: 'RetailMax',
-    type: 'pestel',
-    date: 'Jan 7, 2024',
-    pages: 18,
-    size: '1.8 MB',
-    status: 'delivered',
-    frameworks: ['PESTEL']
-  },
-]
-
-const typeLabels = {
+const typeLabels: Record<string, string> = {
   comprehensive: 'Comprehensive',
   swot: 'SWOT Analysis',
   porters: "Porter's Analysis",
@@ -97,8 +26,26 @@ const statusConfig = {
 }
 
 export default function Reports() {
+  const [reports, setReports] = useState<Report[]>([])
+  const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    fetchReports()
+  }, [])
+
+  const fetchReports = async () => {
+    try {
+      setLoading(true)
+      const data = await api.getReports()
+      setReports(data)
+    } catch (error) {
+      console.error('Failed to fetch reports:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredReports = reports.filter(r => {
     if (filterType !== 'all' && r.type !== filterType) return false
@@ -148,7 +95,7 @@ export default function Reports() {
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-              <Clock size={20} className="text-amber-600" />
+              <Loader2 size={20} className="text-amber-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{generatingReports}</p>
@@ -183,136 +130,118 @@ export default function Reports() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setFilterType('all')}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                filterType === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              )}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setFilterType('comprehensive')}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                filterType === 'comprehensive' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              )}
-            >
-              Comprehensive
-            </button>
-            <button
-              onClick={() => setFilterType('swot')}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                filterType === 'swot' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              )}
-            >
-              SWOT
-            </button>
-            <button
-              onClick={() => setFilterType('porters')}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                filterType === 'porters' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              )}
-            >
-              Porter's
-            </button>
-            <button
-              onClick={() => setFilterType('pestel')}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                filterType === 'pestel' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              )}
-            >
-              PESTEL
-            </button>
+            {['all', 'comprehensive', 'swot', 'porters', 'pestel'].map((type) => (
+              <button
+                key={type}
+                onClick={() => setFilterType(type)}
+                className={clsx(
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                  filterType === type ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                )}
+              >
+                {type === 'all' ? 'All' : typeLabels[type] || type}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
+      {/* Loading */}
+      {loading && (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 flex flex-col items-center justify-center">
+          <Loader2 size={32} className="text-slate-400 animate-spin mb-3" />
+          <p className="text-slate-500">Loading reports...</p>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && filteredReports.length === 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 flex flex-col items-center justify-center">
+          <FileBarChart size={48} className="text-slate-300 mb-3" />
+          <p className="text-slate-500 font-medium">No reports yet</p>
+          <p className="text-slate-400 text-sm">Reports will be generated from completed consultations</p>
+        </div>
+      )}
+
       {/* Reports List */}
-      <div className="space-y-3">
-        {filteredReports.map((report) => {
-          const status = statusConfig[report.status]
-          const StatusIcon = status.icon
-          return (
-            <div key={report.id} className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center">
-                  <FileBarChart size={24} className="text-slate-900" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <div>
-                      <h3 className="font-semibold text-slate-900">{report.title}</h3>
-                      <p className="text-sm text-slate-500">{report.client}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={clsx(
-                        'flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
-                        status.color
-                      )}>
-                        <StatusIcon size={12} className={report.status === 'generating' ? 'animate-spin' : ''} />
-                        {status.label}
-                      </span>
-                    </div>
+      {!loading && filteredReports.length > 0 && (
+        <div className="space-y-3">
+          {filteredReports.map((report) => {
+            const status = statusConfig[report.status] || statusConfig.ready
+            const StatusIcon = status.icon
+            const frameworks = report.frameworks || []
+            return (
+              <div key={report.id} className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition-shadow">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <FileBarChart size={24} className="text-slate-900" />
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
-                    <span className="px-2 py-0.5 bg-slate-100 rounded">
-                      {typeLabels[report.type]}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar size={12} />
-                      {report.date}
-                    </span>
-                    {report.pages > 0 && (
-                      <span>{report.pages} pages</span>
-                    )}
-                    {report.size && (
-                      <span>{report.size}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <div>
+                        <h3 className="font-semibold text-slate-900">{report.title}</h3>
+                        {report.client && <p className="text-sm text-slate-500">{report.client}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={clsx(
+                          'flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
+                          status.color
+                        )}>
+                          <StatusIcon size={12} className={report.status === 'generating' ? 'animate-spin' : ''} />
+                          {status.label}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
+                      <span className="px-2 py-0.5 bg-slate-100 rounded">
+                        {typeLabels[report.type] || report.type}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Calendar size={12} />
+                        {new Date(report.created_at).toLocaleDateString()}
+                      </span>
+                      {report.pages && report.pages > 0 && (
+                        <span>{report.pages} pages</span>
+                      )}
+                      {report.size && (
+                        <span>{report.size}</span>
+                      )}
+                    </div>
+                    {frameworks.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        {frameworks.map((fw) => (
+                          <span key={fw} className="px-2 py-0.5 bg-slate-100 rounded text-xs text-slate-600">
+                            {fw}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {report.frameworks.map((fw) => (
-                      <span key={fw} className="px-2 py-0.5 bg-slate-100 rounded text-xs text-slate-600">
-                        {fw}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {report.status === 'ready' && (
-                    <>
-                      <button className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-                        <Eye size={14} />
-                        View
-                      </button>
-                      <button className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors">
+                    {(report.status === 'ready' || report.status === 'delivered') && report.file_url && (
+                      <a
+                        href={report.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+                      >
                         <Download size={14} />
                         Download
+                      </a>
+                    )}
+                    {report.status === 'generating' && (
+                      <button className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-400 cursor-not-allowed" disabled>
+                        <Loader2 size={14} className="animate-spin" />
+                        Processing...
                       </button>
-                    </>
-                  )}
-                  {report.status === 'generating' && (
-                    <button className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-400 cursor-not-allowed" disabled>
-                      <Loader2 size={14} className="animate-spin" />
-                      Processing...
-                    </button>
-                  )}
-                  {report.status === 'delivered' && (
-                    <button className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors">
-                      <Download size={14} />
-                      Download
-                    </button>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

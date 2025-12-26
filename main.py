@@ -5,7 +5,7 @@ Voice-first AI business consultant using Whisper (STT) + Sesame (TTS)
 
 import os
 import asyncio
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import uvicorn
@@ -179,6 +179,157 @@ async def update_employee(employee_id: str, request: Request):
         return result.data[0] if result.data else None
     except Exception as e:
         logger.error(f"Failed to update employee: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Consultations endpoints
+@app.get("/consultations")
+async def get_consultations():
+    """Get all consultations"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        return []
+    try:
+        result = supabase.client.table("consultations").select("*").order("created_at", desc=True).execute()
+        return result.data or []
+    except Exception as e:
+        logger.error(f"Failed to fetch consultations: {e}")
+        return []
+
+@app.get("/consultations/{consultation_id}")
+async def get_consultation(consultation_id: str):
+    """Get a single consultation"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        result = supabase.client.table("consultations").select("*").eq("id", consultation_id).single().execute()
+        return result.data
+    except Exception as e:
+        logger.error(f"Failed to fetch consultation: {e}")
+        raise HTTPException(status_code=404, detail="Consultation not found")
+
+@app.post("/consultations")
+async def create_consultation(request: Request):
+    """Create a new consultation"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        data = await request.json()
+        result = supabase.client.table("consultations").insert(data).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error(f"Failed to create consultation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/consultations/{consultation_id}")
+async def update_consultation(consultation_id: str, request: Request):
+    """Update a consultation"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        data = await request.json()
+        result = supabase.client.table("consultations").update(data).eq("id", consultation_id).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error(f"Failed to update consultation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Processes endpoints
+@app.get("/processes")
+async def get_processes():
+    """Get all processes"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        return []
+    try:
+        result = supabase.client.table("processes").select("*").order("created_at", desc=True).execute()
+        return result.data or []
+    except Exception as e:
+        logger.error(f"Failed to fetch processes: {e}")
+        return []
+
+@app.get("/processes/{process_id}")
+async def get_process(process_id: str):
+    """Get a single process"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        result = supabase.client.table("processes").select("*").eq("id", process_id).single().execute()
+        return result.data
+    except Exception as e:
+        logger.error(f"Failed to fetch process: {e}")
+        raise HTTPException(status_code=404, detail="Process not found")
+
+@app.post("/processes")
+async def create_process(request: Request):
+    """Create a new process"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        data = await request.json()
+        result = supabase.client.table("processes").insert(data).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error(f"Failed to create process: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/processes/{process_id}")
+async def update_process(process_id: str, request: Request):
+    """Update a process"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        data = await request.json()
+        result = supabase.client.table("processes").update(data).eq("id", process_id).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error(f"Failed to update process: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Reports endpoints
+@app.get("/reports")
+async def get_reports():
+    """Get all reports"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        return []
+    try:
+        result = supabase.client.table("reports").select("*").order("created_at", desc=True).execute()
+        return result.data or []
+    except Exception as e:
+        logger.error(f"Failed to fetch reports: {e}")
+        return []
+
+@app.get("/reports/{report_id}")
+async def get_report(report_id: str):
+    """Get a single report"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        result = supabase.client.table("reports").select("*").eq("id", report_id).single().execute()
+        return result.data
+    except Exception as e:
+        logger.error(f"Failed to fetch report: {e}")
+        raise HTTPException(status_code=404, detail="Report not found")
+
+@app.post("/reports")
+async def create_report(request: Request):
+    """Create a new report"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        data = await request.json()
+        result = supabase.client.table("reports").insert(data).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error(f"Failed to create report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Include interface routers

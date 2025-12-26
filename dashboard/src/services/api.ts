@@ -75,6 +75,55 @@ export interface CallStats {
   outbound_calls: number
 }
 
+export interface ConsultationData {
+  id: string
+  consultation_session_id?: string
+  client_email?: string
+  client_phone?: string
+  company_name?: string
+  contact_name?: string
+  title?: string
+  source_platform?: string
+  status: string
+  phase?: string
+  progress?: number
+  frameworks?: string[]
+  deliverables?: { name: string; completed: boolean }[]
+  context?: Record<string, unknown>
+  analysis?: Record<string, unknown>
+  recommendations?: string[]
+  created_at: string
+  updated_at?: string
+}
+
+export interface Process {
+  id: string
+  name: string
+  department?: string
+  description?: string
+  steps: number
+  employees: number
+  tools: number
+  status: 'active' | 'needs_improvement' | 'optimized' | 'draft'
+  automation_level: number
+  created_at: string
+  updated_at?: string
+}
+
+export interface Report {
+  id: string
+  title: string
+  client?: string
+  consultation_id?: string
+  type: 'comprehensive' | 'swot' | 'porters' | 'pestel' | 'process_map'
+  status: 'ready' | 'generating' | 'delivered'
+  pages?: number
+  size?: string
+  file_url?: string
+  frameworks?: string[]
+  created_at: string
+}
+
 class ApiService {
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -219,6 +268,68 @@ class ApiService {
     return this.fetch<{ success: boolean; message_sid: string }>('/sms/outreach', {
       method: 'POST',
       body: JSON.stringify({ phone_number: phoneNumber, name, company, employee_id: employeeId }),
+    })
+  }
+
+  // Consultations
+  async getConsultations() {
+    return this.fetch<ConsultationData[]>('/consultations')
+  }
+
+  async getConsultation(id: string) {
+    return this.fetch<ConsultationData>(`/consultations/${id}`)
+  }
+
+  async createConsultation(data: Partial<ConsultationData>) {
+    return this.fetch<ConsultationData>('/consultations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateConsultation(id: string, data: Partial<ConsultationData>) {
+    return this.fetch<ConsultationData>(`/consultations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // Processes
+  async getProcesses() {
+    return this.fetch<Process[]>('/processes')
+  }
+
+  async getProcess(id: string) {
+    return this.fetch<Process>(`/processes/${id}`)
+  }
+
+  async createProcess(data: Partial<Process>) {
+    return this.fetch<Process>('/processes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateProcess(id: string, data: Partial<Process>) {
+    return this.fetch<Process>(`/processes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // Reports
+  async getReports() {
+    return this.fetch<Report[]>('/reports')
+  }
+
+  async getReport(id: string) {
+    return this.fetch<Report>(`/reports/${id}`)
+  }
+
+  async createReport(data: Partial<Report>) {
+    return this.fetch<Report>('/reports', {
+      method: 'POST',
+      body: JSON.stringify(data),
     })
   }
 }
