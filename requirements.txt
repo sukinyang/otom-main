@@ -26,6 +26,9 @@ langchain-text-splitters>=0.2.0
 sendgrid>=6.10.0
 aiosmtplib>=3.0.0
 
+# SMS
+twilio>=9.0.0
+
 # Background Tasks
 celery[redis]>=5.3.0
 redis>=5.0.0

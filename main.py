@@ -14,6 +14,7 @@ from core.consultant.otom_brain import OtomConsultant
 from interfaces.voice.voice_handler import VoiceInterface
 from interfaces.chat.chat_handler import ChatInterface
 from interfaces.email.email_handler import EmailInterface
+from interfaces.sms.sms_handler import router as sms_router
 from utils.logger import setup_logger
 
 # Load environment variables
@@ -128,6 +129,7 @@ async def get_services():
 # Include interface routers
 app.include_router(voice_interface.router)
 app.include_router(chat_interface.router)
+app.include_router(sms_router)
 # Note: EmailInterface doesn't have HTTP routes - it's used for outbound emails only
 
 if __name__ == "__main__":
