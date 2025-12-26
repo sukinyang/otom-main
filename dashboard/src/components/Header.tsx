@@ -1,6 +1,9 @@
 import { Bell, Search, User } from 'lucide-react'
+import { useAuth0 } from '@auth0/auth0-react'
 
 export default function Header() {
+  const { user } = useAuth0()
+
   return (
     <header className="h-14 bg-white border-b border-slate-200 px-6 flex items-center justify-between">
       {/* Search */}
@@ -24,12 +27,16 @@ export default function Header() {
         {/* User */}
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <p className="text-sm font-medium text-slate-900">Admin User</p>
-            <p className="text-xs text-slate-500">admin@otom.ai</p>
+            <p className="text-sm font-medium text-slate-900">{user?.name || 'User'}</p>
+            <p className="text-xs text-slate-500">{user?.email || ''}</p>
           </div>
-          <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center">
-            <User size={18} className="text-slate-600" />
-          </div>
+          {user?.picture ? (
+            <img src={user.picture} alt={user.name || 'User'} className="w-9 h-9 rounded-full" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center">
+              <User size={18} className="text-slate-600" />
+            </div>
+          )}
         </div>
       </div>
     </header>

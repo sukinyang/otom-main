@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
+import { useAuth0 } from '@auth0/auth0-react'
 
 type SettingsTab = 'profile' | 'notifications' | 'security' | 'appearance' | 'integrations'
 
@@ -88,31 +89,39 @@ export default function Settings() {
 }
 
 function ProfileSettings() {
+  const { user } = useAuth0()
+  const nameParts = user?.name?.split(' ') || ['', '']
+  const firstName = nameParts[0] || ''
+  const lastName = nameParts.slice(1).join(' ') || ''
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6">
       <h3 className="font-semibold text-slate-900 mb-4">Profile Information</h3>
       <div className="space-y-4">
+        {user?.picture && (
+          <div className="flex items-center gap-4 mb-4">
+            <img src={user.picture} alt={user.name || 'User'} className="w-16 h-16 rounded-full" />
+            <div>
+              <p className="font-medium text-slate-900">{user.name}</p>
+              <p className="text-sm text-slate-500">Profile managed by Auth0</p>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">First Name</label>
-            <input type="text" defaultValue="Admin" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-700" />
+            <input type="text" value={firstName} readOnly className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-600" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Last Name</label>
-            <input type="text" defaultValue="User" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-700" />
+            <input type="text" value={lastName} readOnly className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-600" />
           </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-          <input type="email" defaultValue="admin@otom.ai" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-700" />
+          <input type="email" value={user?.email || ''} readOnly className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-600" />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
-          <input type="text" defaultValue="Otom AI" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-700" />
-        </div>
-        <button className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors">
-          Save Changes
-        </button>
+        <p className="text-xs text-slate-500">Profile information is managed through your Auth0 account.</p>
       </div>
     </div>
   )
