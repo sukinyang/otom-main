@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 import uuid
 
 from supabase import create_client, Client
-from supabase.lib.client_options import ClientOptions
 
 from utils.logger import setup_logger
 
@@ -37,22 +36,21 @@ class SupabaseBackend:
             return
 
         # Initialize Supabase client
-        self.client: Client = create_client(
-            self.supabase_url,
-            self.supabase_key,
-            options=ClientOptions(
-                auto_refresh_token=True,
-                persist_session=True
-            )
-        )
+        try:
+            self.client: Client = create_client(self.supabase_url, self.supabase_key)
+            logger.info("Supabase client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Supabase client: {e}")
+            self.client = None
+            return
 
         # Service client for admin operations
         self.service_client: Client = None
         if self.service_key:
-            self.service_client = create_client(
-                self.supabase_url,
-                self.service_key
-            )
+            try:
+                self.service_client = create_client(self.supabase_url, self.service_key)
+            except Exception as e:
+                logger.error(f"Failed to initialize Supabase service client: {e}")
 
         self.storage_bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "otom-files")
         logger.info("Supabase backend initialized")
