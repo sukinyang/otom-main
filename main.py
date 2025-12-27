@@ -50,10 +50,12 @@ email_interface = EmailInterface(otom)
 @app.get("/")
 async def root():
     """Health check endpoint"""
+    from integrations.supabase_mcp import supabase
     return {
         "status": "active",
         "service": "Otom AI Consultant",
         "version": "1.0.0",
+        "database": "connected" if supabase.client else "not configured",
         "capabilities": [
             "Voice consultations",
             "Strategy development",
