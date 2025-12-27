@@ -606,23 +606,34 @@ export default function Employees() {
                 />
 
                 {!importFile && (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      const file = e.dataTransfer.files[0]
-                      if (file) handleFileSelect(file)
-                    }}
-                    className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition-colors"
-                  >
-                    <FileSpreadsheet size={48} className="text-slate-400 mx-auto mb-3" />
-                    <p className="text-slate-900 font-medium mb-1">Drop your file here or click to browse</p>
-                    <p className="text-sm text-slate-500">Supports CSV, JSON, and TSV files</p>
-                    <p className="text-xs text-slate-400 mt-2">
-                      Required columns: name, phone (or phone_number)
-                    </p>
-                  </div>
+                  <>
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        const file = e.dataTransfer.files[0]
+                        if (file) handleFileSelect(file)
+                      }}
+                      className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition-colors"
+                    >
+                      <FileSpreadsheet size={48} className="text-slate-400 mx-auto mb-3" />
+                      <p className="text-slate-900 font-medium mb-1">Drop your file here or click to browse</p>
+                      <p className="text-sm text-slate-500">Supports CSV, JSON, and TSV files</p>
+                      <p className="text-xs text-slate-400 mt-2">
+                        Required columns: name, phone (or phone_number)
+                      </p>
+                    </div>
+                    <div className="mt-4 text-center">
+                      <a
+                        href="/sample-employees.csv"
+                        download="sample-employees.csv"
+                        className="text-sm text-slate-600 hover:text-slate-900 underline"
+                      >
+                        Download sample CSV template
+                      </a>
+                    </div>
+                  </>
                 )}
 
                 {/* Parse Error */}
