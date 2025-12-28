@@ -534,6 +534,49 @@ async def trigger_scheduled_call(phone_number: str, name: str = ""):
         logger.error(f"Error triggering scheduled call: {e}")
         return False
 
+# Test endpoint to trigger a Vapi call with employee context
+@app.post("/test/trigger-call/{employee_id}")
+async def test_trigger_call(employee_id: str):
+    """Test endpoint to trigger a Vapi call with full employee context"""
+    from integrations.supabase_mcp import supabase
+
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    try:
+        # Get employee
+        result = supabase.client.table("employees").select("*").eq("id", employee_id).single().execute()
+        employee = result.data
+
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+        phone = employee.get("phone_number")
+        if not phone:
+            raise HTTPException(status_code=400, detail="Employee has no phone number")
+
+        # Trigger the call
+        success = await trigger_scheduled_call(phone, employee.get("name", ""))
+
+        return {
+            "success": success,
+            "employee": employee.get("name"),
+            "phone": phone,
+            "context_sent": {
+                "full_name": employee.get("name", ""),
+                "company_name": employee.get("company", ""),
+                "department": employee.get("department", ""),
+                "position": employee.get("role", ""),
+                "employee_id": employee.get("id", ""),
+                "kpis": employee.get("notes", "")
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Test call error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Endpoint to manually trigger pending calls (for cron job)
 @app.post("/webhooks/trigger-scheduled-calls")
 async def trigger_pending_calls():
