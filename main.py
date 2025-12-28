@@ -393,6 +393,156 @@ async def create_report(request: Request):
         logger.error(f"Failed to create report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Cal.com webhook for scheduled calls
+@app.post("/webhooks/cal")
+async def cal_webhook(request: Request):
+    """Handle Cal.com booking webhooks - triggers Vapi call at scheduled time"""
+    import aiohttp
+    from datetime import datetime
+    from integrations.supabase_mcp import supabase
+
+    try:
+        data = await request.json()
+        event_type = data.get("triggerEvent")
+        payload = data.get("payload", {})
+
+        logger.info(f"Cal.com webhook received: {event_type}")
+
+        if event_type == "BOOKING_CREATED":
+            # Extract booking details
+            attendees = payload.get("attendees", [])
+            attendee = attendees[0] if attendees else {}
+
+            booking_data = {
+                "id": payload.get("uid"),
+                "client_email": attendee.get("email"),
+                "client_phone": attendee.get("phone") or payload.get("responses", {}).get("phone", {}).get("value"),
+                "scheduled_at": payload.get("startTime"),
+                "timezone": attendee.get("timeZone", "UTC"),
+                "status": "scheduled",
+                "source_platform": "cal.com",
+                "notes": f"Booked by {attendee.get('name', 'Unknown')} via Cal.com",
+                "created_at": datetime.utcnow().isoformat()
+            }
+
+            # Save to database
+            if supabase.client:
+                supabase.client.table("bookings").insert(booking_data).execute()
+                logger.info(f"Booking saved: {booking_data['id']}")
+
+            # If booking is within next 5 minutes, trigger call immediately
+            if booking_data.get("scheduled_at"):
+                scheduled_time = datetime.fromisoformat(booking_data["scheduled_at"].replace("Z", "+00:00"))
+                now = datetime.now(scheduled_time.tzinfo)
+                minutes_until = (scheduled_time - now).total_seconds() / 60
+
+                if minutes_until <= 5 and booking_data.get("client_phone"):
+                    # Trigger Vapi call now
+                    await trigger_scheduled_call(booking_data["client_phone"], attendee.get("name", ""))
+                    logger.info(f"Immediate call triggered for {booking_data['client_phone']}")
+
+            return {"status": "success", "booking_id": booking_data.get("id")}
+
+        elif event_type == "BOOKING_CANCELLED":
+            booking_uid = payload.get("uid")
+            if supabase.client and booking_uid:
+                supabase.client.table("bookings").update(
+                    {"status": "cancelled"}
+                ).eq("id", booking_uid).execute()
+            return {"status": "success", "cancelled": booking_uid}
+
+        return {"status": "received", "event": event_type}
+
+    except Exception as e:
+        logger.error(f"Cal.com webhook error: {e}")
+        return {"status": "error", "message": str(e)}
+
+async def trigger_scheduled_call(phone_number: str, name: str = ""):
+    """Trigger a Vapi call for a scheduled booking"""
+    import aiohttp
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    vapi_phone_id = os.getenv("VAPI_PHONE_NUMBER_ID")
+    vapi_assistant_id = os.getenv("VAPI_ASSISTANT_ID")
+
+    if not vapi_api_key or not vapi_phone_id:
+        logger.error("VAPI credentials not configured")
+        return False
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Bearer {vapi_api_key}",
+                "Content-Type": "application/json"
+            }
+
+            payload = {
+                "phoneNumberId": vapi_phone_id,
+                "customer": {
+                    "number": phone_number,
+                    "name": name
+                }
+            }
+
+            if vapi_assistant_id:
+                payload["assistantId"] = vapi_assistant_id
+
+            async with session.post(
+                "https://api.vapi.ai/call/phone",
+                headers=headers,
+                json=payload
+            ) as response:
+                if response.status == 201:
+                    result = await response.json()
+                    logger.info(f"Scheduled Vapi call triggered: {result.get('id')}")
+                    return True
+                else:
+                    error = await response.text()
+                    logger.error(f"Failed to trigger scheduled call: {error}")
+                    return False
+
+    except Exception as e:
+        logger.error(f"Error triggering scheduled call: {e}")
+        return False
+
+# Endpoint to manually trigger pending calls (for cron job)
+@app.post("/webhooks/trigger-scheduled-calls")
+async def trigger_pending_calls():
+    """Trigger calls for bookings that are due now (call via cron every minute)"""
+    from datetime import datetime, timedelta
+    from integrations.supabase_mcp import supabase
+
+    if not supabase.client:
+        return {"status": "error", "message": "Database not available"}
+
+    try:
+        now = datetime.utcnow()
+        window_start = (now - timedelta(minutes=2)).isoformat()
+        window_end = (now + timedelta(minutes=2)).isoformat()
+
+        # Get pending bookings in the current time window
+        result = supabase.client.table("bookings").select("*").eq(
+            "status", "scheduled"
+        ).gte("scheduled_at", window_start).lte("scheduled_at", window_end).execute()
+
+        calls_triggered = 0
+        for booking in result.data or []:
+            phone = booking.get("client_phone")
+            if phone:
+                success = await trigger_scheduled_call(phone, booking.get("notes", ""))
+                if success:
+                    # Update booking status
+                    supabase.client.table("bookings").update(
+                        {"status": "call_triggered"}
+                    ).eq("id", booking["id"]).execute()
+                    calls_triggered += 1
+
+        return {"status": "success", "calls_triggered": calls_triggered}
+
+    except Exception as e:
+        logger.error(f"Error triggering scheduled calls: {e}")
+        return {"status": "error", "message": str(e)}
+
 # Include interface routers
 app.include_router(voice_interface.router)
 app.include_router(chat_interface.router)
