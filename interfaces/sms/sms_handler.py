@@ -54,6 +54,9 @@ class SMSInterface:
             self.validator = None
             logger.warning("Twilio credentials not configured - SMS features unavailable")
 
+        # Cal.com booking link
+        self.cal_link = os.getenv("CAL_BOOKING_URL", "https://cal.com/sukin-yang-vw9ds8/meet-with-otom")
+
         # SMS templates
         self.templates = {
             "initial_outreach": """Hi {name}! This is Otom from {company}.
@@ -69,14 +72,11 @@ Reply:
 
 Thank you!""",
 
-            "schedule_followup": """Great! When works best for you?
+            "schedule_followup": """Great! Pick a time that works for you:
 
-Reply with a number:
-1 - Today
-2 - Tomorrow
-3 - This week
+{cal_link}
 
-Or reply with a specific time like "Tuesday 2pm".""",
+Just click the link and choose a slot. We'll call you at the scheduled time!""",
 
             "call_confirmation": """Perfect! You'll receive a call from Otom shortly.
 
@@ -194,14 +194,14 @@ If you change your mind, just reply "CALL" and we'll reach out."""
             return self.templates["call_confirmation"]
 
         elif body_lower in ["2", "schedule", "later"]:
-            # User wants to schedule
+            # User wants to schedule - send Cal.com link
             if employee and supabase.client:
                 await supabase.update(
                     "employees",
                     employee["id"],
                     {"status": "scheduling", "updated_at": datetime.utcnow().isoformat()}
                 )
-            return self.templates["schedule_followup"]
+            return self.templates["schedule_followup"].format(cal_link=self.cal_link)
 
         elif body_lower in ["3", "no", "not interested", "stop"]:
             # User not interested
