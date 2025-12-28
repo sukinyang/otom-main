@@ -534,6 +534,16 @@ async def trigger_scheduled_call(phone_number: str, name: str = ""):
         logger.error(f"Error triggering scheduled call: {e}")
         return False
 
+# Debug endpoint to check SMS config
+@app.get("/debug/sms-config")
+async def debug_sms_config():
+    """Check SMS/Twilio configuration"""
+    return {
+        "TWILIO_ACCOUNT_SID": "set" if os.getenv("TWILIO_ACCOUNT_SID") else "MISSING",
+        "TWILIO_AUTH_TOKEN": "set" if os.getenv("TWILIO_AUTH_TOKEN") else "MISSING",
+        "TWILIO_PHONE_NUMBER": os.getenv("TWILIO_PHONE_NUMBER", "MISSING")
+    }
+
 # Test endpoint to trigger a Vapi call with employee context
 @app.post("/test/trigger-call/{employee_id}")
 async def test_trigger_call(employee_id: str):
