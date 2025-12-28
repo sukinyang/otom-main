@@ -4,13 +4,14 @@ import {
   Bell,
   Shield,
   Palette,
-  Globe
+  Globe,
+  Zap
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth0 } from '@auth0/auth0-react'
 
-type SettingsTab = 'profile' | 'notifications' | 'security' | 'appearance' | 'integrations'
+type SettingsTab = 'profile' | 'notifications' | 'security' | 'appearance' | 'integrations' | 'automation'
 
 interface Tab {
   id: SettingsTab
@@ -21,6 +22,7 @@ interface Tab {
 const tabs: Tab[] = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'automation', label: 'Automation', icon: Zap },
   { id: 'security', label: 'Security', icon: Shield },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'integrations', label: 'Integrations', icon: Globe },
@@ -79,6 +81,7 @@ export default function Settings() {
         <div className="flex-1">
           {activeTab === 'profile' && <ProfileSettings />}
           {activeTab === 'notifications' && <NotificationSettings />}
+          {activeTab === 'automation' && <AutomationSettings />}
           {activeTab === 'security' && <SecuritySettings />}
           {activeTab === 'appearance' && <AppearanceSettings />}
           {activeTab === 'integrations' && <IntegrationSettings integrations={integrations} />}
@@ -236,6 +239,79 @@ function IntegrationSettings({ integrations }: { integrations: Integration[] }) 
             </button>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function AutomationSettings() {
+  const [autoOutreach, setAutoOutreach] = useState(() => {
+    return localStorage.getItem('otom_auto_outreach') === 'true'
+  })
+  const [companyName, setCompanyName] = useState(() => {
+    return localStorage.getItem('otom_company_name') || ''
+  })
+
+  const handleAutoOutreachChange = (enabled: boolean) => {
+    setAutoOutreach(enabled)
+    localStorage.setItem('otom_auto_outreach', enabled.toString())
+  }
+
+  const handleCompanyNameChange = (name: string) => {
+    setCompanyName(name)
+    localStorage.setItem('otom_company_name', name)
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-2">Outreach Automation</h3>
+        <p className="text-sm text-slate-500 mb-4">Configure automatic SMS outreach settings</p>
+
+        <div className="space-y-4">
+          <label className="flex items-center justify-between p-4 bg-slate-50 rounded-lg cursor-pointer">
+            <div>
+              <p className="font-medium text-slate-900">Auto-send on Import</p>
+              <p className="text-sm text-slate-500">Automatically send outreach SMS when employees are imported</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={autoOutreach}
+              onChange={(e) => handleAutoOutreachChange(e.target.checked)}
+              className="w-5 h-5 rounded text-slate-900 focus:ring-slate-700"
+            />
+          </label>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Company Name</label>
+            <input
+              type="text"
+              value={companyName}
+              onChange={(e) => handleCompanyNameChange(e.target.value)}
+              placeholder="Your company name (used in outreach messages)"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-700"
+            />
+            <p className="text-xs text-slate-500 mt-1">This will appear in: "Hi [Name]! This is Otom from [Company Name]..."</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-2">Outreach Message Preview</h3>
+        <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 whitespace-pre-line">
+{`Hi [Employee Name]! This is Otom from ${companyName || '[Your Company]'}.
+
+We're reaching out to learn about your experience and gather feedback.
+
+Would you be available for a quick 5-10 minute call?
+
+Reply:
+1 - Yes, call me now
+2 - Schedule for later
+3 - Not interested
+
+Thank you!`}
+        </div>
       </div>
     </div>
   )

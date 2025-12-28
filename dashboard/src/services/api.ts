@@ -278,6 +278,13 @@ class ApiService {
     })
   }
 
+  async sendBulkOutreach(employees: { id: string; name: string; phone_number: string }[], company: string) {
+    return this.fetch<{ total: number; sent: number; failed: number; errors: string[] }>('/sms/bulk-outreach', {
+      method: 'POST',
+      body: JSON.stringify({ employees, company }),
+    })
+  }
+
   // Consultations
   async getConsultations() {
     return this.fetch<ConsultationData[]>('/consultations')

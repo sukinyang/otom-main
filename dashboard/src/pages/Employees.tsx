@@ -55,6 +55,10 @@ export default function Employees() {
   const [parseError, setParseError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Bulk outreach state
+  const [sendingBulk, setSendingBulk] = useState(false)
+  const [bulkResult, setBulkResult] = useState<{ total: number; sent: number; failed: number } | null>(null)
+
   useEffect(() => {
     fetchEmployees()
   }, [])
@@ -240,13 +244,48 @@ export default function Employees() {
       const result = await api.importEmployees(parsedData)
       setImportResult(result)
       if (result.imported > 0) {
-        fetchEmployees()
+        await fetchEmployees()
+
+        // Check if auto-outreach is enabled
+        const autoOutreach = localStorage.getItem('otom_auto_outreach') === 'true'
+        if (autoOutreach) {
+          // Get fresh employee list and send outreach to newly imported
+          const freshEmployees = await api.getEmployees()
+          const pendingEmployees = freshEmployees.filter(e => e.status === 'pending')
+          if (pendingEmployees.length > 0) {
+            const companyName = localStorage.getItem('otom_company_name') || 'Otom'
+            await handleBulkOutreach(pendingEmployees, companyName)
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to import:', error)
       setImportResult({ imported: 0, skipped: parsedData.length, errors: ['Import failed. Please try again.'] })
     } finally {
       setImporting(false)
+    }
+  }
+
+  const handleBulkOutreach = async (targetEmployees?: Employee[], company?: string) => {
+    const employeesToSend = targetEmployees || employees.filter(e => e.status === 'pending')
+    if (employeesToSend.length === 0) return
+
+    const companyName = company || localStorage.getItem('otom_company_name') || 'Otom'
+
+    setSendingBulk(true)
+    setBulkResult(null)
+    try {
+      const result = await api.sendBulkOutreach(
+        employeesToSend.map(e => ({ id: e.id, name: e.name, phone_number: e.phone_number })),
+        companyName
+      )
+      setBulkResult(result)
+      fetchEmployees() // Refresh to update statuses
+    } catch (error) {
+      console.error('Failed to send bulk outreach:', error)
+      setBulkResult({ total: employeesToSend.length, sent: 0, failed: employeesToSend.length })
+    } finally {
+      setSendingBulk(false)
     }
   }
 
@@ -281,6 +320,25 @@ export default function Employees() {
           <p className="text-slate-600">Manage team members for outreach and interviews</p>
         </div>
         <div className="flex items-center gap-2">
+          {pendingEmployees > 0 && (
+            <button
+              onClick={() => handleBulkOutreach()}
+              disabled={sendingBulk}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              {sendingBulk ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <MessageCircle size={18} />
+                  Send All ({pendingEmployees})
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
@@ -297,6 +355,38 @@ export default function Employees() {
           </button>
         </div>
       </div>
+
+      {/* Bulk Outreach Result */}
+      {bulkResult && (
+        <div className={clsx(
+          'p-4 rounded-lg flex items-center justify-between',
+          bulkResult.sent > 0 ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'
+        )}>
+          <div className="flex items-center gap-3">
+            {bulkResult.sent > 0 ? (
+              <CheckCircle2 size={20} className="text-green-600" />
+            ) : (
+              <AlertCircle size={20} className="text-amber-600" />
+            )}
+            <div>
+              <p className={clsx('font-medium', bulkResult.sent > 0 ? 'text-green-800' : 'text-amber-800')}>
+                {bulkResult.sent > 0
+                  ? `Sent ${bulkResult.sent} outreach message${bulkResult.sent > 1 ? 's' : ''}`
+                  : 'No messages sent'}
+              </p>
+              {bulkResult.failed > 0 && (
+                <p className="text-sm text-slate-600">{bulkResult.failed} failed</p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => setBulkResult(null)}
+            className="p-1 hover:bg-white/50 rounded"
+          >
+            <X size={18} className="text-slate-500" />
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
