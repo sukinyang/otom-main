@@ -32,6 +32,7 @@ twilio>=9.0.0
 # Background Tasks
 celery[redis]>=5.3.0
 redis>=5.0.0
+apscheduler>=3.10.0
 
 # Web Scraping (for market research)
 beautifulsoup4>=4.12.0

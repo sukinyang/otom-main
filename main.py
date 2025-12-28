@@ -5,10 +5,12 @@ Voice-first AI business consultant using Whisper (STT) + Sesame (TTS)
 
 import os
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import uvicorn
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from core.consultant.otom_brain import OtomConsultant
 from interfaces.voice.voice_handler import VoiceInterface
@@ -20,11 +22,61 @@ from utils.logger import setup_logger
 # Load environment variables
 load_dotenv()
 
+# Initialize logger
+logger = setup_logger("otom_main")
+
+# Scheduler for cron jobs
+scheduler = AsyncIOScheduler()
+
+async def check_scheduled_calls():
+    """Background job to trigger scheduled calls every minute"""
+    from datetime import datetime, timedelta
+    from integrations.supabase_mcp import supabase
+
+    if not supabase.client:
+        return
+
+    try:
+        now = datetime.utcnow()
+        window_start = (now - timedelta(minutes=2)).isoformat()
+        window_end = (now + timedelta(minutes=2)).isoformat()
+
+        # Get pending bookings in the current time window
+        result = supabase.client.table("bookings").select("*").eq(
+            "status", "scheduled"
+        ).gte("scheduled_at", window_start).lte("scheduled_at", window_end).execute()
+
+        for booking in result.data or []:
+            phone = booking.get("client_phone")
+            if phone:
+                # Import here to avoid circular imports
+                success = await trigger_scheduled_call(phone, booking.get("notes", ""))
+                if success:
+                    supabase.client.table("bookings").update(
+                        {"status": "call_triggered"}
+                    ).eq("id", booking["id"]).execute()
+                    logger.info(f"Scheduled call triggered for booking {booking['id']}")
+
+    except Exception as e:
+        logger.error(f"Error in scheduled call check: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events"""
+    # Start the scheduler
+    scheduler.add_job(check_scheduled_calls, 'interval', minutes=1)
+    scheduler.start()
+    logger.info("Scheduled call checker started (runs every minute)")
+    yield
+    # Shutdown
+    scheduler.shutdown()
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Otom AI Consultant",
     description="AI-powered business consultant with voice-first interface",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Setup CORS
