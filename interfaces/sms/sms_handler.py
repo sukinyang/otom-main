@@ -228,7 +228,7 @@ If you change your mind, just reply "CALL" and we'll reach out."""
             return "Thanks for your message! Reply 1 for a call now, 2 to schedule, or 3 if not interested."
 
     async def _trigger_vapi_call(self, phone_number: str, employee: Dict) -> None:
-        """Trigger a Vapi call to the phone number"""
+        """Trigger a Vapi call to the phone number with full employee context"""
         import aiohttp
 
         vapi_api_key = os.getenv("VAPI_API_KEY")
@@ -245,16 +245,33 @@ If you change your mind, just reply "CALL" and we'll reach out."""
                     "Content-Type": "application/json"
                 }
 
+                # Build variable values for Vapi template
+                variable_values = {
+                    "full_name": employee.get("name", ""),
+                    "company_name": employee.get("company", ""),
+                    "department": employee.get("department", ""),
+                    "position": employee.get("role", ""),
+                    "employee_id": employee.get("id", ""),
+                    "kpis": employee.get("notes", ""),  # KPIs can be stored in notes field
+                    "email": employee.get("email", ""),
+                    "phone": phone_number
+                }
+
                 payload = {
                     "phoneNumberId": os.getenv("VAPI_PHONE_NUMBER_ID"),
                     "customer": {
                         "number": phone_number,
                         "name": employee.get("name", "")
+                    },
+                    "assistantOverrides": {
+                        "variableValues": variable_values
                     }
                 }
 
                 if vapi_assistant_id:
                     payload["assistantId"] = vapi_assistant_id
+
+                logger.info(f"Triggering Vapi call with context: {variable_values}")
 
                 async with session.post(
                     "https://api.vapi.ai/call/phone",

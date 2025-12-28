@@ -458,8 +458,9 @@ async def cal_webhook(request: Request):
         return {"status": "error", "message": str(e)}
 
 async def trigger_scheduled_call(phone_number: str, name: str = ""):
-    """Trigger a Vapi call for a scheduled booking"""
+    """Trigger a Vapi call for a scheduled booking with full employee context"""
     import aiohttp
+    from integrations.supabase_mcp import supabase
 
     vapi_api_key = os.getenv("VAPI_API_KEY")
     vapi_phone_id = os.getenv("VAPI_PHONE_NUMBER_ID")
@@ -469,6 +470,17 @@ async def trigger_scheduled_call(phone_number: str, name: str = ""):
         logger.error("VAPI credentials not configured")
         return False
 
+    # Look up employee by phone number to get full context
+    employee = None
+    if supabase.client:
+        try:
+            result = supabase.client.table("employees").select("*").eq("phone_number", phone_number).execute()
+            if result.data:
+                employee = result.data[0]
+                logger.info(f"Found employee context for {phone_number}: {employee.get('name')}")
+        except Exception as e:
+            logger.warning(f"Could not fetch employee data: {e}")
+
     try:
         async with aiohttp.ClientSession() as session:
             headers = {
@@ -476,16 +488,33 @@ async def trigger_scheduled_call(phone_number: str, name: str = ""):
                 "Content-Type": "application/json"
             }
 
+            # Build variable values for Vapi template
+            variable_values = {
+                "full_name": employee.get("name", name) if employee else name,
+                "company_name": employee.get("company", "") if employee else "",
+                "department": employee.get("department", "") if employee else "",
+                "position": employee.get("role", "") if employee else "",
+                "employee_id": employee.get("id", "") if employee else "",
+                "kpis": employee.get("notes", "") if employee else "",
+                "email": employee.get("email", "") if employee else "",
+                "phone": phone_number
+            }
+
             payload = {
                 "phoneNumberId": vapi_phone_id,
                 "customer": {
                     "number": phone_number,
-                    "name": name
+                    "name": variable_values["full_name"]
+                },
+                "assistantOverrides": {
+                    "variableValues": variable_values
                 }
             }
 
             if vapi_assistant_id:
                 payload["assistantId"] = vapi_assistant_id
+
+            logger.info(f"Triggering Vapi call with context: {variable_values}")
 
             async with session.post(
                 "https://api.vapi.ai/call/phone",
