@@ -119,7 +119,7 @@ If you change your mind, just reply "CALL" and we'll reach out."""
             }
 
             if supabase.client:
-                await supabase.insert("sms_messages", sms_record)
+                supabase.client.table("sms_messages").insert(sms_record).execute()
 
             logger.info(f"SMS sent to {to_number}: {twilio_message.sid}")
             return {
@@ -169,14 +169,11 @@ If you change your mind, just reply "CALL" and we'll reach out."""
         # Find employee by phone number
         employee = None
         if supabase.client:
-            await supabase.insert("sms_messages", sms_record)
+            supabase.client.table("sms_messages").insert(sms_record).execute()
             # Try to find the employee
-            result = await supabase.query(
-                "employees",
-                filters={"phone_number": from_number}
-            )
-            if result:
-                employee = result[0]
+            result = supabase.client.table("employees").select("*").eq("phone_number", from_number).execute()
+            if result.data:
+                employee = result.data[0]
                 sms_record["employee_id"] = employee.get("id")
 
         # Determine response based on input
@@ -186,31 +183,25 @@ If you change your mind, just reply "CALL" and we'll reach out."""
                 await self._trigger_vapi_call(from_number, employee)
                 # Update employee status
                 if supabase.client:
-                    await supabase.update(
-                        "employees",
-                        employee["id"],
+                    supabase.client.table("employees").update(
                         {"status": "call_requested", "updated_at": datetime.utcnow().isoformat()}
-                    )
+                    ).eq("id", employee["id"]).execute()
             return self.templates["call_confirmation"]
 
         elif body_lower in ["2", "schedule", "later"]:
             # User wants to schedule - send Cal.com link
             if employee and supabase.client:
-                await supabase.update(
-                    "employees",
-                    employee["id"],
+                supabase.client.table("employees").update(
                     {"status": "scheduling", "updated_at": datetime.utcnow().isoformat()}
-                )
+                ).eq("id", employee["id"]).execute()
             return self.templates["schedule_followup"].format(cal_link=self.cal_link)
 
         elif body_lower in ["3", "no", "not interested", "stop"]:
             # User not interested
             if employee and supabase.client:
-                await supabase.update(
-                    "employees",
-                    employee["id"],
+                supabase.client.table("employees").update(
                     {"status": "declined", "updated_at": datetime.utcnow().isoformat()}
-                )
+                ).eq("id", employee["id"]).execute()
             return self.templates["thank_you"]
 
         elif body_lower in ["today", "1"] and employee:
