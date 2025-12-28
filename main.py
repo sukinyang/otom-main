@@ -538,7 +538,26 @@ async def trigger_scheduled_call(phone_number: str, name: str = ""):
 @app.post("/test/trigger-call/{employee_id}")
 async def test_trigger_call(employee_id: str):
     """Test endpoint to trigger a Vapi call with full employee context"""
+    import aiohttp
     from integrations.supabase_mcp import supabase
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    vapi_phone_id = os.getenv("VAPI_PHONE_NUMBER_ID")
+    vapi_assistant_id = os.getenv("VAPI_ASSISTANT_ID")
+
+    # Check env vars first
+    env_status = {
+        "VAPI_API_KEY": "set" if vapi_api_key else "MISSING",
+        "VAPI_PHONE_NUMBER_ID": "set" if vapi_phone_id else "MISSING",
+        "VAPI_ASSISTANT_ID": "set" if vapi_assistant_id else "MISSING"
+    }
+
+    if not vapi_api_key or not vapi_phone_id:
+        return {
+            "success": False,
+            "error": "Missing VAPI credentials",
+            "env_status": env_status
+        }
 
     if not supabase.client:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -555,27 +574,65 @@ async def test_trigger_call(employee_id: str):
         if not phone:
             raise HTTPException(status_code=400, detail="Employee has no phone number")
 
-        # Trigger the call
-        success = await trigger_scheduled_call(phone, employee.get("name", ""))
-
-        return {
-            "success": success,
-            "employee": employee.get("name"),
-            "phone": phone,
-            "context_sent": {
-                "full_name": employee.get("name", ""),
-                "company_name": employee.get("company", ""),
-                "department": employee.get("department", ""),
-                "position": employee.get("role", ""),
-                "employee_id": employee.get("id", ""),
-                "kpis": employee.get("notes", "")
-            }
+        # Build context
+        variable_values = {
+            "full_name": employee.get("name", ""),
+            "company_name": employee.get("company", ""),
+            "department": employee.get("department", ""),
+            "position": employee.get("role", ""),
+            "employee_id": employee.get("id", ""),
+            "kpis": employee.get("notes", ""),
+            "email": employee.get("email", ""),
+            "phone": phone
         }
+
+        # Make direct Vapi call with detailed error handling
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Bearer {vapi_api_key}",
+                "Content-Type": "application/json"
+            }
+
+            payload = {
+                "phoneNumberId": vapi_phone_id,
+                "customer": {
+                    "number": phone,
+                    "name": variable_values["full_name"]
+                },
+                "assistantOverrides": {
+                    "variableValues": variable_values
+                }
+            }
+
+            if vapi_assistant_id:
+                payload["assistantId"] = vapi_assistant_id
+
+            async with session.post(
+                "https://api.vapi.ai/call/phone",
+                headers=headers,
+                json=payload
+            ) as response:
+                response_text = await response.text()
+
+                return {
+                    "success": response.status == 201,
+                    "vapi_status": response.status,
+                    "vapi_response": response_text,
+                    "employee": employee.get("name"),
+                    "phone": phone,
+                    "context_sent": variable_values,
+                    "env_status": env_status
+                }
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Test call error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "success": False,
+            "error": str(e),
+            "env_status": env_status
+        }
 
 # Endpoint to manually trigger pending calls (for cron job)
 @app.post("/webhooks/trigger-scheduled-calls")
