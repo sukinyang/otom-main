@@ -596,6 +596,25 @@ async def debug_sms_config():
         "TWILIO_PHONE_NUMBER": os.getenv("TWILIO_PHONE_NUMBER", "MISSING")
     }
 
+# Debug endpoint to check bookings
+@app.get("/debug/bookings")
+async def debug_bookings():
+    """Check pending bookings"""
+    from datetime import datetime
+    from integrations.supabase_mcp import supabase
+
+    if not supabase.client:
+        return {"error": "Database not available"}
+
+    try:
+        result = supabase.client.table("bookings").select("*").order("created_at", desc=True).limit(10).execute()
+        return {
+            "current_time_utc": datetime.utcnow().isoformat(),
+            "bookings": result.data or []
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 # Test endpoint to trigger a Vapi call with employee context
 @app.post("/test/trigger-call/{employee_id}")
 async def test_trigger_call(employee_id: str):
