@@ -15,8 +15,12 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from core.consultant.otom_brain import OtomConsultant
 from interfaces.voice.voice_handler import VoiceInterface
 from interfaces.chat.chat_handler import ChatInterface
-from interfaces.email.email_handler import EmailInterface
+from interfaces.email.email_handler import EmailInterface, email_router
 from interfaces.sms.sms_handler import router as sms_router
+from interfaces.whatsapp.whatsapp_handler import router as whatsapp_router
+from interfaces.slack.slack_handler import router as slack_router
+from interfaces.teams.teams_handler import router as teams_router
+from interfaces.zoom.zoom_handler import router as zoom_router
 from utils.logger import setup_logger
 
 # Load environment variables
@@ -757,7 +761,11 @@ async def trigger_pending_calls():
 app.include_router(voice_interface.router)
 app.include_router(chat_interface.router)
 app.include_router(sms_router)
-# Note: EmailInterface doesn't have HTTP routes - it's used for outbound emails only
+app.include_router(email_router)
+app.include_router(whatsapp_router)
+app.include_router(slack_router)
+app.include_router(teams_router)
+app.include_router(zoom_router)
 
 if __name__ == "__main__":
     logger.info("Starting Otom AI Consultant...")

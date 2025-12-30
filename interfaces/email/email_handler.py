@@ -1,6 +1,6 @@
 """
 Email Interface for Otom
-Handles asynchronous email-based consultations
+Handles asynchronous email-based consultations and outreach
 """
 
 import os
@@ -17,8 +17,13 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
 import base64
 
+from fastapi import APIRouter, Request, HTTPException
+
 from utils.logger import setup_logger
 from utils.nlp_parser import NLPParser
+
+# Router for email API endpoints
+email_router = APIRouter(prefix="/email", tags=["Email"])
 
 try:
     from core.tasks.email_tasks import process_email_consultation
@@ -46,11 +51,17 @@ class EmailInterface:
         # Email templates
         self.templates = self._load_email_templates()
 
+        # Outreach templates
+        self.outreach_templates = self._load_outreach_templates()
+
         # Active email conversations
         self.email_sessions = {}
 
         # Initialize NLP parser for email analysis
         self.nlp_parser = NLPParser()
+
+        # Cal.com booking link
+        self.cal_link = os.getenv("CAL_BOOKING_URL", "https://cal.com/sukin-yang-vw9ds8/meet-with-otom")
 
     def _load_email_templates(self) -> Dict:
         """Load email templates"""
@@ -132,6 +143,185 @@ class EmailInterface:
                 """
             }
         }
+
+    def _load_outreach_templates(self) -> Dict:
+        """Load outreach email templates"""
+        return {
+            "initial_outreach": {
+                "subject": "Quick Chat About Your Work at {company}",
+                "template": """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: #1a1a1a; color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+        .content {{ background: #f9f9f9; padding: 30px; border: 1px solid #e0e0e0; }}
+        .cta-button {{ display: inline-block; background: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 5px 10px 0; }}
+        .cta-button:hover {{ background: #333; }}
+        .footer {{ padding: 20px; font-size: 12px; color: #666; text-align: center; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin:0;">Otom Process Consultant</h2>
+        </div>
+        <div class="content">
+            <p>Hi {name},</p>
+
+            <p>I'm Otom, a business process consultant working with <strong>{company}</strong>.</p>
+
+            <p>We're conducting a brief workflow analysis to identify opportunities for improvement in the <strong>{department}</strong> department.</p>
+
+            <p>I'd love to chat with you for about <strong>10-15 minutes</strong> to learn about your day-to-day work and any challenges you face.</p>
+
+            <p><strong>Choose what works best for you:</strong></p>
+
+            <a href="{cal_link}" class="cta-button">📅 Schedule a Call</a>
+
+            <p style="margin-top: 20px;">Your insights will help us make meaningful improvements to workflows at {company}.</p>
+
+            <p>Thank you!<br>
+            <strong>Otom</strong><br>
+            AI Process Consultant</p>
+        </div>
+        <div class="footer">
+            <p>This is an automated outreach from Otom. If you have questions, simply reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+            },
+            "reminder": {
+                "subject": "Reminder: Schedule Your Process Review Call",
+                "template": """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .content {{ background: #f9f9f9; padding: 30px; border: 1px solid #e0e0e0; border-radius: 8px; }}
+        .cta-button {{ display: inline-block; background: #1a1a1a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <p>Hi {name},</p>
+
+            <p>Just a quick reminder — I'd still love to chat about your workflows at <strong>{company}</strong>.</p>
+
+            <p>It only takes 10-15 minutes and your input is valuable!</p>
+
+            <p><a href="{cal_link}" class="cta-button">📅 Schedule Now</a></p>
+
+            <p>Thanks!<br>Otom</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+            }
+        }
+
+    async def send_outreach_email(
+        self,
+        to_email: str,
+        employee_name: str,
+        company_name: str,
+        department: str = "",
+        employee_id: str = None
+    ) -> Dict[str, Any]:
+        """Send initial outreach email to an employee"""
+        from integrations.supabase_mcp import supabase
+
+        if not self.sendgrid_api_key and not self.smtp_host:
+            logger.error("No email provider configured")
+            return {"success": False, "error": "Email not configured"}
+
+        try:
+            template = self.outreach_templates["initial_outreach"]
+
+            content = template["template"].format(
+                name=employee_name,
+                company=company_name,
+                department=department or "your",
+                cal_link=self.cal_link
+            )
+
+            subject = template["subject"].format(company=company_name)
+
+            success = await self.send_email(to_email, subject, content)
+
+            # Log to Supabase
+            if supabase.client:
+                email_record = {
+                    "id": str(uuid.uuid4()),
+                    "employee_id": employee_id,
+                    "to_email": to_email,
+                    "subject": subject,
+                    "template": "initial_outreach",
+                    "status": "sent" if success else "failed",
+                    "created_at": datetime.utcnow().isoformat()
+                }
+                try:
+                    supabase.client.table("email_outreach").insert(email_record).execute()
+                except Exception as e:
+                    logger.warning(f"Failed to log email to database: {e}")
+
+            if success:
+                logger.info(f"Outreach email sent to {to_email}")
+                return {"success": True, "to": to_email}
+            else:
+                return {"success": False, "error": "Failed to send email"}
+
+        except Exception as e:
+            logger.error(f"Failed to send outreach email: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+    async def bulk_send_outreach(
+        self,
+        employees: List[Dict],
+        company_name: str
+    ) -> Dict[str, Any]:
+        """Send outreach emails to multiple employees"""
+        results = {
+            "total": len(employees),
+            "sent": 0,
+            "failed": 0,
+            "errors": []
+        }
+
+        for employee in employees:
+            email = employee.get("email")
+            name = employee.get("name", "there")
+            department = employee.get("department", "")
+            emp_id = employee.get("id")
+
+            if not email:
+                results["failed"] += 1
+                results["errors"].append(f"No email for {name}")
+                continue
+
+            result = await self.send_outreach_email(
+                to_email=email,
+                employee_name=name,
+                company_name=company_name,
+                department=department,
+                employee_id=emp_id
+            )
+
+            if result.get("success"):
+                results["sent"] += 1
+            else:
+                results["failed"] += 1
+                results["errors"].append(f"{name}: {result.get('error')}")
+
+        return results
 
     async def send_email(self, to_email: str, subject: str, content: str,
                         attachments: List[Dict] = None, template: str = None) -> bool:
@@ -517,3 +707,97 @@ class EmailInterface:
         except Exception as e:
             logger.error(f"Failed to send follow-up: {str(e)}")
             return False
+
+
+# Initialize email interface (without otom consultant for outreach)
+class OutreachEmailInterface(EmailInterface):
+    """Simplified email interface for outreach only"""
+    def __init__(self):
+        self.sendgrid_api_key = os.getenv("SENDGRID_API_KEY")
+        self.from_email = os.getenv("FROM_EMAIL", "otom@consultant.ai")
+        self.smtp_host = os.getenv("SMTP_HOST")
+        self.smtp_port = int(os.getenv("SMTP_PORT", 587))
+        self.smtp_user = os.getenv("SMTP_USER")
+        self.smtp_password = os.getenv("SMTP_PASSWORD")
+        self.templates = self._load_email_templates()
+        self.outreach_templates = self._load_outreach_templates()
+        self.cal_link = os.getenv("CAL_BOOKING_URL", "https://cal.com/sukin-yang-vw9ds8/meet-with-otom")
+
+
+# Global outreach instance
+email_outreach = OutreachEmailInterface()
+
+
+# ============================================
+# API Routes for Email Outreach
+# ============================================
+
+@email_router.post("/outreach")
+async def send_email_outreach(request: Request):
+    """Send outreach email to an employee"""
+    try:
+        data = await request.json()
+
+        to_email = data.get("email")
+        employee_name = data.get("name", "there")
+        company_name = data.get("company", "your company")
+        department = data.get("department", "")
+        employee_id = data.get("employee_id")
+
+        if not to_email:
+            raise HTTPException(status_code=400, detail="Missing 'email'")
+
+        result = await email_outreach.send_outreach_email(
+            to_email=to_email,
+            employee_name=employee_name,
+            company_name=company_name,
+            department=department,
+            employee_id=employee_id
+        )
+
+        if result.get("success"):
+            return result
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error"))
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Email outreach error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@email_router.post("/bulk-outreach")
+async def bulk_email_outreach(request: Request):
+    """Send outreach emails to multiple employees"""
+    try:
+        data = await request.json()
+
+        employees = data.get("employees", [])
+        company_name = data.get("company", "your company")
+
+        if not employees:
+            raise HTTPException(status_code=400, detail="No employees provided")
+
+        result = await email_outreach.bulk_send_outreach(
+            employees=employees,
+            company_name=company_name
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Bulk email outreach error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@email_router.get("/config")
+async def get_email_config():
+    """Check email configuration status"""
+    return {
+        "SENDGRID_API_KEY": "set" if os.getenv("SENDGRID_API_KEY") else "MISSING",
+        "FROM_EMAIL": os.getenv("FROM_EMAIL", "MISSING"),
+        "SMTP_HOST": "set" if os.getenv("SMTP_HOST") else "not configured"
+    }
