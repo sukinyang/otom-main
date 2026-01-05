@@ -1,5 +1,6 @@
 import React from 'react';
-import { User, Bell, Settings, Search, ChevronDown } from 'lucide-react';
+import { useAuth0 } from '@auth0/auth0-react';
+import { User, Bell, Settings, Search, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -11,6 +12,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const Header = () => {
+  const { user, logout } = useAuth0();
+
+  const handleLogout = () => {
+    logout({ logoutParams: { returnTo: window.location.origin } });
+  };
+
   return (
     <header className="bg-card border-b border-border px-6 py-3 fixed top-0 left-0 right-0 z-30">
       <div className="flex items-center justify-between">
@@ -36,12 +43,20 @@ const Header = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-3 px-3 hover:bg-muted">
                 <div className="text-right hidden sm:block">
-                  <p className="text-sm font-medium text-foreground">Admin User</p>
-                  <p className="text-xs text-muted-foreground">admin@otom.ai</p>
+                  <p className="text-sm font-medium text-foreground">{user?.name || 'User'}</p>
+                  <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
                 </div>
-                <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center">
-                  <User className="w-5 h-5 text-primary" />
-                </div>
+                {user?.picture ? (
+                  <img
+                    src={user.picture}
+                    alt={user.name || 'User'}
+                    className="w-9 h-9 rounded-full"
+                  />
+                ) : (
+                  <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center">
+                    <User className="w-5 h-5 text-primary" />
+                  </div>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -54,7 +69,8 @@ const Header = () => {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem className="text-destructive" onClick={handleLogout}>
+                <LogOut className="w-4 h-4 mr-2" />
                 Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
