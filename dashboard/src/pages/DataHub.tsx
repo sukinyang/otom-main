@@ -1,20 +1,21 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Upload, 
-  Trash2, 
+import {
+  Upload,
+  Trash2,
   Download,
   FolderOpen,
   Database,
   Users,
   MessageSquare,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { employeesData } from '@/data/employeesData';
+import { api, Employee } from '@/services/api';
 
 interface UploadedFile {
   id: string;
@@ -25,23 +26,35 @@ interface UploadedFile {
   aiDescription: string;
 }
 
-interface EmployeeContext {
-  employeeId: string;
-  employeeName: string;
-  department: string;
-  files: Array<{
-    id: string;
-    name: string;
-    size: number;
-    uploadedAt: Date;
-    aiDescription: string;
-  }>;
-  questions: string[];
-}
-
 const DataHub = () => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+
+  // Employee data from API
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(true);
+  const [employeesError, setEmployeesError] = useState<string | null>(null);
+
+  // Fetch employees from API
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setEmployeesLoading(true);
+        setEmployeesError(null);
+        const data = await api.getEmployees();
+        setEmployees(data);
+      } catch (err) {
+        console.error('Failed to fetch employees:', err);
+        setEmployeesError('Failed to load employees');
+      } finally {
+        setEmployeesLoading(false);
+      }
+    };
+
+    fetchEmployees();
+  }, []);
+
   const [files, setFiles] = useState<UploadedFile[]>([
     {
       id: '1',
@@ -77,66 +90,6 @@ const DataHub = () => {
     }
   ]);
   const [isDragging, setIsDragging] = useState(false);
-
-  // Mock employee context data
-  const [employeeContexts] = useState<EmployeeContext[]>([
-    {
-      employeeId: 'sarah-johnson',
-      employeeName: 'Sarah Johnson',
-      department: 'Operations',
-      files: [
-        {
-          id: 'sj-f1',
-          name: 'Operations Manual v3.pdf',
-          size: 1850000,
-          uploadedAt: new Date('2024-01-10'),
-          aiDescription: 'Internal operations manual specific to Sarah\'s team responsibilities and workflows.'
-        }
-      ],
-      questions: [
-        'What are the main bottlenecks in the order fulfillment process?',
-        'How do you coordinate with the warehouse team during peak seasons?'
-      ]
-    },
-    {
-      employeeId: 'lisa-rodriguez',
-      employeeName: 'Lisa Rodriguez',
-      department: 'IT',
-      files: [
-        {
-          id: 'lr-f1',
-          name: 'System Architecture Diagram.pdf',
-          size: 2100000,
-          uploadedAt: new Date('2024-01-05'),
-          aiDescription: 'Technical architecture diagram showing IT infrastructure and system integrations.'
-        },
-        {
-          id: 'lr-f2',
-          name: 'Security Protocols.docx',
-          size: 560000,
-          uploadedAt: new Date('2024-01-08'),
-          aiDescription: 'Documentation of security protocols and access control procedures.'
-        }
-      ],
-      questions: [
-        'What are the biggest security concerns for the organization?',
-        'How is technical debt being managed across teams?',
-        'What cloud migration challenges have you encountered?'
-      ]
-    },
-    {
-      employeeId: 'emma-davis',
-      employeeName: 'Emma Davis',
-      department: 'HR',
-      files: [],
-      questions: [
-        'What improvements could streamline the onboarding process?',
-        'How do you measure employee satisfaction currently?'
-      ]
-    }
-  ]);
-
-  const navigate = useNavigate();
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -219,9 +172,9 @@ const DataHub = () => {
 
   const stats = {
     total: files.length,
-    employeesWithContext: employeeContexts.filter(e => e.files.length > 0 || e.questions.length > 0).length,
-    totalQuestions: employeeContexts.reduce((acc, e) => acc + e.questions.length, 0),
-    totalEmployeeFiles: employeeContexts.reduce((acc, e) => acc + e.files.length, 0)
+    employeesWithContext: employees.filter(e => e.notes).length,
+    totalQuestions: 0, // Questions will be stored in employee notes or a separate API
+    totalEmployeeFiles: 0 // Files per employee will come from a separate API
   };
 
   return (
@@ -411,74 +364,69 @@ const DataHub = () => {
             <CardHeader>
               <CardTitle className="text-lg">Employee Context</CardTitle>
               <CardDescription>
-                Files and custom questions added to individual employees
+                View employees and their associated context data
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {employeeContexts.filter(e => e.files.length > 0 || e.questions.length > 0).length === 0 ? (
+              {employeesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <span className="ml-2 text-muted-foreground">Loading employees...</span>
+                </div>
+              ) : employeesError ? (
+                <div className="text-center py-12 text-destructive">
+                  <p>{employeesError}</p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => window.location.reload()}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : employees.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No employee context added yet</p>
-                  <p className="text-sm">Add context to employees from their profile page</p>
+                  <p>No employees found</p>
+                  <p className="text-sm">Add employees to get started</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {employeeContexts.filter(e => e.files.length > 0 || e.questions.length > 0).map((context) => (
-                    <div key={context.employeeId} className="border rounded-lg p-4">
-                      <div 
-                        className="flex items-center gap-3 mb-4 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => navigate(`/employees/${context.employeeId}`)}
+                  {employees.map((employee) => (
+                    <div key={employee.id} className="border rounded-lg p-4">
+                      <div
+                        className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => navigate(`/employees/${employee.id}`)}
                       >
                         <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
                           <span className="text-sm font-medium text-primary">
-                            {context.employeeName.split(' ').map(n => n[0]).join('')}
+                            {employee.name.split(' ').map(n => n[0]).join('')}
                           </span>
                         </div>
-                        <div>
-                          <p className="font-medium hover:text-primary transition-colors">{context.employeeName}</p>
-                          <p className="text-xs text-muted-foreground">{context.department}</p>
+                        <div className="flex-1">
+                          <p className="font-medium hover:text-primary transition-colors">{employee.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {employee.department || 'No department'} {employee.role && `- ${employee.role}`}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            employee.status === 'active'
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                          }`}>
+                            {employee.status}
+                          </span>
                         </div>
                       </div>
-                      {/* Files */}
-                      {context.files.length > 0 && (
-                        <div className="mb-4">
+                      {employee.notes && (
+                        <div className="mt-3 pt-3 border-t">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                            Files ({context.files.length})
+                            Notes
                           </p>
-                          <div className="space-y-2">
-                            {context.files.map((file) => (
-                              <div key={file.id} className="flex items-start gap-3 p-2 bg-muted/50 rounded-lg">
-                                <div className={`w-8 h-8 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${getExtensionColor(file.name)}`}>
-                                  {getFileExtension(file.name)}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm truncate">{file.name}</p>
-                                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                                    {file.aiDescription}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {formatFileSize(file.size)} • {file.uploadedAt.toLocaleDateString()}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Questions */}
-                      {context.questions.length > 0 && (
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                            Custom Questions ({context.questions.length})
-                          </p>
-                          <div className="space-y-1">
-                            {context.questions.map((question, idx) => (
-                              <div key={idx} className="flex items-start gap-2 p-2 bg-muted/50 rounded-lg">
-                                <MessageSquare className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                                <p className="text-sm">{question}</p>
-                              </div>
-                            ))}
+                          <div className="flex items-start gap-2 p-2 bg-muted/50 rounded-lg">
+                            <FileText className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                            <p className="text-sm">{employee.notes}</p>
                           </div>
                         </div>
                       )}

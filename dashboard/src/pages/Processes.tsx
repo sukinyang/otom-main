@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import ProcessTable from '@/components/processes/ProcessTable';
 import ProcessDetail from '@/components/processes/ProcessDetail';
-import { processData as mockProcessData, Process } from '@/data/processData';
-import { api } from '@/services/api';
+import { api, Process } from '@/services/api';
 
 const Processes = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,33 +21,11 @@ const Processes = () => {
 
     try {
       const apiProcesses = await api.getProcesses();
-
-      // If the API returns processes with the full structure, use them
-      // Otherwise, fall back to mock data
-      if (apiProcesses && apiProcesses.length > 0) {
-        // Check if API data has the required complex structure
-        const hasComplexStructure = apiProcesses.some(
-          (p: any) => p.interviewCoverage && p.steps && p.painPoints
-        );
-
-        if (hasComplexStructure) {
-          // API returns full structured data - use it directly
-          setProcesses(apiProcesses as unknown as Process[]);
-        } else {
-          // API returns simplified data - merge with mock data or use mock as fallback
-          // For now, use mock data but log that API data was received
-          console.log('API returned simplified process data, using mock data for full structure');
-          setProcesses(mockProcessData);
-        }
-      } else {
-        // No API data, use mock data
-        setProcesses(mockProcessData);
-      }
+      setProcesses(apiProcesses || []);
     } catch (err) {
       console.error('Failed to fetch processes:', err);
-      setError('Failed to load processes from server. Showing cached data.');
-      // Fall back to mock data on error
-      setProcesses(mockProcessData);
+      setError('Failed to load processes from server.');
+      setProcesses([]);
     } finally {
       setIsLoading(false);
     }
@@ -62,8 +39,8 @@ const Processes = () => {
     return (
       searchQuery === '' ||
       process.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      process.owner.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      process.department.toLowerCase().includes(searchQuery.toLowerCase())
+      (process.department && process.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (process.description && process.description.toLowerCase().includes(searchQuery.toLowerCase()))
     );
   });
 

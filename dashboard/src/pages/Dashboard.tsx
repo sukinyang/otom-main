@@ -22,8 +22,30 @@ import {
   Phone
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { employeesData, getEmployeeStats, formatInterviewStatus } from '@/data/employeesData';
 import { api, CallStats, Employee, Process } from '@/services/api';
+
+// Helper function to format interview status from API employee data
+const formatInterviewStatus = (employee: Employee): { label: string; detail: string } => {
+  const status = employee.status?.toLowerCase() || 'pending';
+
+  if (status === 'completed') {
+    const updatedDate = employee.updated_at ? new Date(employee.updated_at) : new Date(employee.created_at);
+    return {
+      label: 'Completed',
+      detail: updatedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    };
+  } else if (status === 'scheduled') {
+    return {
+      label: 'Scheduled',
+      detail: 'Upcoming'
+    };
+  } else {
+    return {
+      label: 'Pending',
+      detail: 'Not scheduled'
+    };
+  }
+};
 
 interface DashboardProps {
   onNavigate?: (view: string) => void;
@@ -67,49 +89,45 @@ const Dashboard = ({ onNavigate }: DashboardProps) => {
     fetchDashboardData();
   }, []);
 
-  // Get real stats from shared data (fallback for local employee data)
-  const employeeStats = getEmployeeStats();
-
-  // Calculate stats from API data when available
+  // Calculate stats from API data
   const totalApiEmployees = apiEmployees.length;
-  const completedInterviews = apiEmployees.filter(e => e.status === 'completed').length;
-  const scheduledInterviews = apiEmployees.filter(e => e.status === 'scheduled').length;
-  const pendingInterviews = apiEmployees.filter(e => e.status === 'pending').length;
+  const completedInterviews = apiEmployees.filter(e => e.status?.toLowerCase() === 'completed').length;
+  const scheduledInterviews = apiEmployees.filter(e => e.status?.toLowerCase() === 'scheduled').length;
+  const pendingInterviews = apiEmployees.filter(e => !e.status || e.status?.toLowerCase() === 'pending').length;
 
   // Get unique departments from API employees
   const apiDepartments = [...new Set(apiEmployees.map(e => e.department).filter(Boolean))];
   const departmentsAudited = apiDepartments.length;
 
-  // Audit Progress Stats - using real API data when available
+  // Audit Progress Stats - using real API data
   const auditStats = {
-    interviewsCompleted: totalApiEmployees > 0 ? completedInterviews : employeeStats.completed,
-    interviewsTotal: totalApiEmployees > 0 ? totalApiEmployees : employeeStats.total,
-    departmentsAudited: departmentsAudited > 0 ? departmentsAudited : 5,
-    departmentsTotal: 8,
-    processesDiscovered: processes.length > 0 ? processes.length : 48,
+    interviewsCompleted: completedInterviews,
+    interviewsTotal: totalApiEmployees,
+    departmentsAudited: departmentsAudited,
+    departmentsTotal: Math.max(departmentsAudited, 8),
+    processesDiscovered: processes.length,
     insightsGenerated: 23
   };
 
-  // Department Progress - calculated from actual employee data
-  const departments = [...new Set(employeesData.map(e => e.department))];
-  const departmentProgress = departments.slice(0, 6).map((dept, index) => {
-    const deptEmployees = employeesData.filter(e => e.department === dept);
-    const completed = deptEmployees.filter(e => e.status === 'completed').length;
+  // Department Progress - calculated from API employee data
+  const departmentProgress = apiDepartments.slice(0, 6).map((dept, index) => {
+    const deptEmployees = apiEmployees.filter(e => e.department === dept);
+    const completed = deptEmployees.filter(e => e.status?.toLowerCase() === 'completed').length;
     return {
-      name: dept,
+      name: dept || 'Unknown',
       completed,
       total: deptEmployees.length,
       color: index % 2 === 0 ? 'bg-primary' : 'bg-accent'
     };
   });
 
-  // Interview status from shared data
-  const interviewStatus = employeesData.map(emp => {
+  // Interview status from API data
+  const interviewStatus = apiEmployees.map(emp => {
     const statusInfo = formatInterviewStatus(emp);
     return {
       id: emp.id,
       name: emp.name,
-      department: emp.department,
+      department: emp.department || 'Unknown',
       status: statusInfo.label,
       timestamp: statusInfo.detail
     };
@@ -421,9 +439,9 @@ const Dashboard = ({ onNavigate }: DashboardProps) => {
             <div className="flex gap-2 mb-4 flex-wrap">
               {[
                 { id: 'all', label: `All (${interviewStatus.length})` },
-                { id: 'completed', label: `Completed (${employeeStats.completed})` },
-                { id: 'scheduled', label: `Scheduled (${employeeStats.scheduled})` },
-                { id: 'pending', label: `Pending (${employeeStats.pending})` },
+                { id: 'completed', label: `Completed (${completedInterviews})` },
+                { id: 'scheduled', label: `Scheduled (${scheduledInterviews})` },
+                { id: 'pending', label: `Pending (${pendingInterviews})` },
               ].map((tab) => (
                 <Button
                   key={tab.id}

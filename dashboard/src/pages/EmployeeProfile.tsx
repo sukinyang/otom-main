@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  ArrowLeft, Calendar, Phone, MessageCircle, Eye, FileText, RefreshCw, User, 
-  Building2, Users, AlertTriangle, Target, Lightbulb, Clock, TrendingUp, 
-  CheckCircle, Zap, Workflow, Award, CalendarClock, Mail, History, XCircle, 
-  ChevronRight, ChevronDown, HelpCircle, UserCheck, MessageSquare, BarChart3, 
-  Quote, MapPin, Briefcase, Shield
+import {
+  ArrowLeft, Calendar, Phone, MessageCircle, Eye, FileText, RefreshCw, User,
+  Building2, Users, AlertTriangle, Target, Lightbulb, Clock, TrendingUp,
+  CheckCircle, Zap, Workflow, Award, CalendarClock, Mail, History, XCircle,
+  ChevronRight, ChevronDown, HelpCircle, UserCheck, MessageSquare, BarChart3,
+  Quote, MapPin, Briefcase, Shield, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -15,15 +15,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import Header from '@/components/Header';
-import QuotesModal from '@/components/QuotesModal';
 import AddContextModal from '@/components/AddContextModal';
-import ProcessTable from '@/components/processes/ProcessTable';
-import { getEmployeeById, Employee, formatInterviewStatus, getInterviewLogs, getLatestCompletedInterview, InterviewLog, employeesData } from '@/data/employeesData';
-import { processData, Process } from '@/data/processData';
+import { api, Employee, Process } from '@/services/api';
 
-// Interview depth types for this employee's responses
+// Local type definitions for interview-related data
 type InterviewDepth = 'deep-dive' | 'detailed' | 'brief' | 'passing' | 'dismissive';
 type ConfidenceLevel = 'high' | 'medium' | 'low' | 'unverified';
+
+interface InterviewLog {
+  id: string;
+  date: string;
+  time: string;
+  type: string;
+  status: 'completed' | 'scheduled' | 'cancelled';
+  duration?: string;
+  sentiment?: string;
+  engagementScore?: number;
+  summary?: string;
+  keyTopics?: string[];
+  insights?: {
+    improvements: string[];
+    concerns: string[];
+    strengths: string[];
+  };
+  transcript?: string;
+}
 
 interface EmployeeQuote {
   quote: string;
@@ -31,15 +47,6 @@ interface EmployeeQuote {
   sentiment: 'positive' | 'negative' | 'neutral' | 'frustrated';
   interviewDate: string;
   depth: InterviewDepth;
-}
-
-interface ProcessMention {
-  processName: string;
-  role: string;
-  mentionDepth: InterviewDepth;
-  quotes: EmployeeQuote[];
-  challenges?: string[];
-  suggestions?: string[];
 }
 
 interface EmployeeInsight {
@@ -59,11 +66,11 @@ interface EmployeeTagProps {
 
 const EmployeeTag = ({ employeeId, employeeName, role }: EmployeeTagProps) => {
   const navigate = useNavigate();
-  
+
   const handleClick = () => {
     navigate(`/employees/${employeeId}`);
   };
-  
+
   return (
     <button
       onClick={handleClick}
@@ -91,7 +98,7 @@ interface CollapsibleSectionProps {
 
 const CollapsibleSection = ({ title, icon, defaultOpen = false, children, badge }: CollapsibleSectionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger className="flex items-center gap-2 w-full text-left hover:bg-muted/50 p-2 -ml-2 rounded group">
@@ -106,7 +113,7 @@ const CollapsibleSection = ({ title, icon, defaultOpen = false, children, badge 
           <Badge variant="secondary" className="ml-2">{badge}</Badge>
         )}
       </CollapsibleTrigger>
-      
+
       <CollapsibleContent className="pl-8 mt-3 space-y-4">
         {children}
       </CollapsibleContent>
@@ -186,8 +193,8 @@ const EditableProperty = ({ value, onChange, type = 'text', options = [], badgeC
             ))}
           </select>
         ) : (
-          <Badge 
-            variant="secondary" 
+          <Badge
+            variant="secondary"
             className={`${badgeClassName} cursor-pointer hover:ring-1 hover:ring-primary/50`}
             onClick={() => setIsEditing(true)}
           >
@@ -211,7 +218,7 @@ const EditableProperty = ({ value, onChange, type = 'text', options = [], badgeC
           className="text-sm bg-muted border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary min-w-[150px]"
         />
       ) : (
-        <span 
+        <span
           onClick={() => setIsEditing(true)}
           className="text-sm text-foreground cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded -mx-1 transition-colors"
         >
@@ -226,13 +233,18 @@ const EmployeeProfile = () => {
   const { employeeId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const targetInterviewDate = (location.state as { interviewDate?: string })?.interviewDate;
-  
+
+  // API data state
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [processes, setProcesses] = useState<Process[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [selectedInterview, setSelectedInterview] = useState<InterviewLog | null>(null);
   const [isContextModalOpen, setIsContextModalOpen] = useState(false);
-  const [openProcesses, setOpenProcesses] = useState<Record<number, boolean>>({ 0: true });
-  
+
   // Editable employee state
   const [editableEmployee, setEditableEmployee] = useState({
     department: '',
@@ -244,254 +256,91 @@ const EmployeeProfile = () => {
     manager: ''
   });
 
-  // Get employee data from shared data source
-  const employee: Employee = getEmployeeById(employeeId || '') || {
-    id: employeeId || 'unknown',
-    name: employeeId?.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || 'Unknown Employee',
-    role: 'Team Member',
-    department: 'General',
-    status: 'pending',
-    email: `${employeeId}@company.com`,
-    phone: '+1 (555) 000-0000',
-    interviewDate: null,
-    interviewTime: null,
-    manager: 'Not Assigned',
-    engagement: 'Medium',
-    tenure: '1 year',
-    location: 'Remote'
-  };
-
-  // Get interview logs for this employee
-  const interviewLogs = getInterviewLogs(employee.id);
-  const latestCompletedInterview = getLatestCompletedInterview(employee.id);
-  const completedInterviews = interviewLogs.filter(log => log.status === 'completed');
-  const scheduledInterviews = interviewLogs.filter(log => log.status === 'scheduled');
-
-  const statusInfo = formatInterviewStatus(employee);
-
-  // Get manager as employee
-  const managerEmployee = employeesData.find(e => e.name === employee.manager);
-
-  // Initialize editable employee state from employee data
+  // Fetch employee and processes from API
   useEffect(() => {
-    setEditableEmployee({
-      department: employee.department,
-      location: employee.location,
-      tenure: employee.tenure,
-      engagement: employee.engagement,
-      email: employee.email,
-      phone: employee.phone,
-      manager: employee.manager
-    });
-  }, [employee.id]);
+    const fetchData = async () => {
+      if (!employeeId) {
+        setError('No employee ID provided');
+        setLoading(false);
+        return;
+      }
 
-  // Auto-select interview if navigating from a quote
-  useEffect(() => {
-    if (targetInterviewDate && interviewLogs.length > 0) {
-      const matchingInterview = interviewLogs.find(log => log.date === targetInterviewDate);
-      if (matchingInterview) {
-        setSelectedInterview(matchingInterview);
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [employeeData, processesData] = await Promise.all([
+          api.getEmployee(employeeId),
+          api.getProcesses()
+        ]);
+
+        setEmployee(employeeData);
+        setProcesses(processesData);
+
+        // Initialize editable state from API data
+        setEditableEmployee({
+          department: employeeData.department || '',
+          location: '',
+          tenure: '',
+          engagement: 'Medium',
+          email: employeeData.email || '',
+          phone: employeeData.phone_number || '',
+          manager: ''
+        });
+      } catch (err) {
+        console.error('Error fetching employee:', err);
+        setError('Failed to load employee data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [employeeId]);
+
+  // Update editable property and save to API
+  const updateProperty = async (key: keyof typeof editableEmployee, value: string) => {
+    setEditableEmployee(prev => ({ ...prev, [key]: value }));
+
+    // Map editable keys to API fields
+    if (employee) {
+      const apiFieldMap: Record<string, string> = {
+        department: 'department',
+        email: 'email',
+        phone: 'phone_number'
+      };
+
+      const apiField = apiFieldMap[key];
+      if (apiField) {
+        try {
+          await api.updateEmployee(employee.id, { [apiField]: value });
+        } catch (err) {
+          console.error('Failed to update employee:', err);
+        }
       }
     }
-  }, [targetInterviewDate, interviewLogs]);
-
-  // Update editable property
-  const updateProperty = (key: keyof typeof editableEmployee, value: string) => {
-    setEditableEmployee(prev => ({ ...prev, [key]: value }));
-    // In a real app, you'd save this to backend here
   };
 
-  // Get processes where this employee is involved (mentioned in quotes)
-  const getEmployeeProcesses = (): Process[] => {
-    return processData.filter(process => {
-      // Check if employee is mentioned in any quotes across the process
-      const isInSteps = process.steps.some(step => 
-        step.supportingQuotes.some(q => q.employeeName === employee.name || q.employeeId === employee.id)
-      );
-      const isInPainPoints = process.painPoints.some(pp => 
-        pp.supportingQuotes.some(q => q.employeeName === employee.name || q.employeeId === employee.id)
-      );
-      const isInSuggestions = process.improvementSuggestions.some(is => 
-        is.supportingQuotes.some(q => q.employeeName === employee.name || q.employeeId === employee.id)
-      );
-      const isInWorkarounds = process.workarounds.some(w => 
-        w.supportingQuotes.some(q => q.employeeName === employee.name || q.employeeId === employee.id)
-      );
-      const isOwner = process.owner === employee.name;
-      
-      return isInSteps || isInPainPoints || isInSuggestions || isInWorkarounds || isOwner;
-    });
-  };
+  // Format interview status based on employee status
+  const getStatusInfo = () => {
+    if (!employee) return { status: 'pending', detail: 'No data' };
 
-  const employeeProcesses = getEmployeeProcesses();
-
-  // Mock interview-backed data for this employee
-  const interviewCoverage = {
-    totalInterviews: completedInterviews.length,
-    averageDepth: completedInterviews.length > 0 ? 'detailed' as InterviewDepth : 'passing' as InterviewDepth,
-    topicsDiscussed: completedInterviews.length > 0 ? 12 : 0,
-    totalQuotes: completedInterviews.length > 0 ? 24 : 0,
-  };
-
-  // Process mentions from interviews
-  const processMentions: ProcessMention[] = completedInterviews.length > 0 ? [
-    {
-      processName: 'Order Processing',
-      role: 'Primary participant',
-      mentionDepth: 'deep-dive',
-      quotes: [
-        {
-          quote: "So every morning I'm checking the order queue, right? And the thing that kills me is the manual data entry. Like, I have to copy stuff from the CRM into SAP field by field. It takes hours and honestly I mess up sometimes. We all do.",
-          topic: 'Daily workflow',
-          sentiment: 'frustrated',
-          interviewDate: '2024-01-15',
-          depth: 'deep-dive'
-        },
-        {
-          quote: "Rush orders are a nightmare. There's no automatic flagging so I literally have to call the warehouse and be like 'hey, this one's urgent.' It's very manual.",
-          topic: 'Process challenges',
-          sentiment: 'negative',
-          interviewDate: '2024-01-15',
-          depth: 'detailed'
-        }
-      ],
-      challenges: ['Manual data entry between systems', 'No automated priority flagging'],
-      suggestions: ['Automate CRM to ERP sync', 'Implement priority queue system']
-    },
-    {
-      processName: 'Quality Control',
-      role: 'Occasional involvement',
-      mentionDepth: 'brief',
-      quotes: [
-        {
-          quote: "Yeah I get pulled into QC stuff sometimes. Like when a customer complains about an order I processed, they'll loop me in to figure out what happened.",
-          topic: 'Cross-process involvement',
-          sentiment: 'neutral',
-          interviewDate: '2024-01-15',
-          depth: 'brief'
-        }
-      ]
-    },
-    {
-      processName: 'Customer Support Escalations',
-      role: 'Escalation point',
-      mentionDepth: 'detailed',
-      quotes: [
-        {
-          quote: "Support pings me constantly. 'Where's this order?' 'What's the status on that?' And I have to dig through like three different systems to find anything. It's a scavenger hunt every time.",
-          topic: 'Support process',
-          sentiment: 'frustrated',
-          interviewDate: '2024-01-15',
-          depth: 'detailed'
-        }
-      ],
-      challenges: ['No unified order tracking view', 'Multiple systems to check']
+    switch (employee.status) {
+      case 'completed':
+        return { status: 'completed', detail: 'Interview completed' };
+      case 'scheduled':
+        return { status: 'scheduled', detail: 'Interview scheduled' };
+      case 'active':
+        return { status: 'scheduled', detail: 'Active' };
+      default:
+        return { status: 'pending', detail: 'No interview scheduled' };
     }
-  ] : [];
-
-  // Synthesized insights from interviews
-  const employeeInsights: EmployeeInsight[] = completedInterviews.length > 0 ? [
-    {
-      category: 'improvement',
-      summary: 'Strongly advocates for automated data sync between CRM and ERP systems',
-      confidence: 'high',
-      mentionCount: 4,
-      supportingQuotes: [
-        {
-          quote: "If we could just automate this CRM to SAP thing? Like have it sync automatically? I'd save probably five, six hours a week easy. Time I could spend actually solving problems instead of just... typing.",
-          topic: 'Automation suggestion',
-          sentiment: 'positive',
-          interviewDate: '2024-01-15',
-          depth: 'deep-dive'
-        }
-      ]
-    },
-    {
-      category: 'improvement',
-      summary: 'Suggested implementing real-time order tracking for customers',
-      confidence: 'high',
-      mentionCount: 2,
-      supportingQuotes: [
-        {
-          quote: "Real-time tracking would be amazing. Like half my calls are literally just 'where's my stuff?' I could just send them a link instead of playing phone tag all day.",
-          topic: 'Customer experience',
-          sentiment: 'positive',
-          interviewDate: '2024-01-15',
-          depth: 'detailed'
-        }
-      ]
-    },
-    {
-      category: 'concern',
-      summary: 'Frustrated with approval delays for large orders',
-      confidence: 'medium',
-      mentionCount: 2,
-      supportingQuotes: [
-        {
-          quote: "Large orders are the worst because they need Finance to sign off. And like, if they're traveling or in back-to-back meetings? Orders just sit there for days. Customers are waiting, I'm waiting, everyone's waiting.",
-          topic: 'Process bottleneck',
-          sentiment: 'frustrated',
-          interviewDate: '2024-01-15',
-          depth: 'detailed'
-        }
-      ]
-    },
-    {
-      category: 'strength',
-      summary: 'Strong cross-team communication skills, built effective Slack coordination',
-      confidence: 'high',
-      mentionCount: 3,
-      supportingQuotes: [
-        {
-          quote: "We've actually gotten a lot better at coordination. I set up a Slack channel for real-time stuff, and when sales has something urgent they just ping me there. It works pretty well honestly.",
-          topic: 'Team collaboration',
-          sentiment: 'positive',
-          interviewDate: '2024-01-15',
-          depth: 'deep-dive'
-        }
-      ]
-    },
-    {
-      category: 'workaround',
-      summary: 'Uses personal spreadsheet to track orders because official system is slow',
-      confidence: 'medium',
-      mentionCount: 1,
-      supportingQuotes: [
-        {
-          quote: "Don't tell anyone but I have my own Excel sheet for urgent orders. [laughs] The ERP is just... it's slow. I can't get a quick snapshot of what's going on. So I made my own thing.",
-          topic: 'Shadow process',
-          sentiment: 'neutral',
-          interviewDate: '2024-01-15',
-          depth: 'brief'
-        }
-      ]
-    }
-  ] : [];
-
-  // Knowledge gaps - things we still don't know about this employee
-  const knowledgeGaps = completedInterviews.length > 0 ? [
-    'Specific time spent on each process step not quantified',
-    'Interaction with finance approval process unclear',
-    'Full list of systems accessed daily not documented'
-  ] : [];
-
-  const toggleProcess = (index: number) => {
-    setOpenProcesses(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
-  // Format dates
-  const createdDate = employee.interviewDate ? new Date(employee.interviewDate) : new Date();
-  const formattedCreated = createdDate.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
+  const statusInfo = getStatusInfo();
 
   const getStatusBadge = () => {
-    switch (employee.status) {
+    switch (statusInfo.status) {
       case 'completed':
         return (
           <Badge className="bg-success/10 text-success border-success/20">
@@ -507,6 +356,7 @@ const EmployeeProfile = () => {
           </Badge>
         );
       case 'pending':
+      default:
         return (
           <Badge className="bg-muted text-muted-foreground border-muted-foreground/20">
             <AlertTriangle className="w-3 h-3 mr-1" />
@@ -558,15 +408,6 @@ const EmployeeProfile = () => {
     }
   };
 
-  const getConfidenceLabel = (confidence: ConfidenceLevel) => {
-    switch (confidence) {
-      case 'high': return 'High';
-      case 'medium': return 'Medium';
-      case 'low': return 'Low';
-      default: return 'Unverified';
-    }
-  };
-
   const getCategoryIcon = (category: EmployeeInsight['category']) => {
     switch (category) {
       case 'improvement': return <Lightbulb className="w-4 h-4 text-primary" />;
@@ -585,26 +426,74 @@ const EmployeeProfile = () => {
     }
   };
 
-  // Helper to convert EmployeeQuote to QuotesModal format
-  const convertToQuoteItem = (quote: EmployeeQuote) => ({
-    employeeName: employee.name,
-    role: employee.role,
-    department: employee.department,
-    quote: quote.quote,
-    sentiment: quote.sentiment,
-    interviewDate: quote.interviewDate,
-    depth: quote.depth,
-    topic: quote.topic
-  });
+  // Format dates
+  const formattedCreated = employee?.created_at
+    ? new Date(employee.created_at).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      })
+    : '';
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background w-full pt-[73px]">
+        <Header />
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="ml-3 text-muted-foreground">Loading employee...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state or employee not found
+  if (error || !employee) {
+    return (
+      <div className="min-h-screen bg-background w-full pt-[73px]">
+        <Header />
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/', { state: { view: 'employees' } })}
+            className="mb-4 -ml-2 text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Employees
+          </Button>
+
+          <Card className="border-destructive/50">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3 text-destructive">
+                <AlertTriangle className="w-6 h-6" />
+                <div>
+                  <h2 className="text-xl font-semibold">Employee Not Found</h2>
+                  <p className="text-muted-foreground mt-1">
+                    {error || `No employee found with ID: ${employeeId}`}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background w-full pt-[73px]">
       <Header />
-      
+
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Back Button */}
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           onClick={() => navigate('/', { state: { view: 'employees' } })}
           className="mb-4 -ml-2 text-muted-foreground hover:text-foreground"
         >
@@ -615,7 +504,7 @@ const EmployeeProfile = () => {
         {/* Employee Name & Role */}
         <div className="mb-2">
           <h1 className="text-4xl font-bold text-foreground">{employee.name}</h1>
-          <p className="text-lg text-muted-foreground mt-1">{employee.role}</p>
+          <p className="text-lg text-muted-foreground mt-1">{employee.role || 'Team Member'}</p>
         </div>
 
         {/* Properties Section */}
@@ -632,12 +521,12 @@ const EmployeeProfile = () => {
             </div>
           </div>
 
-          {/* Last Interview */}
-          {employee.interviewDate && (
+          {/* Created At */}
+          {employee.created_at && (
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2 text-muted-foreground w-44">
                 <Clock className="w-4 h-4" />
-                <span className="text-sm">Last Interview</span>
+                <span className="text-sm">Created</span>
               </div>
               <span className="text-sm text-foreground">{formattedCreated}</span>
             </div>
@@ -658,25 +547,16 @@ const EmployeeProfile = () => {
             />
           </div>
 
-          {/* Reports To */}
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 text-muted-foreground w-44">
-              <Users className="w-4 h-4" />
-              <span className="text-sm">Reports to</span>
+          {/* Company */}
+          {employee.company && (
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2 text-muted-foreground w-44">
+                <Building2 className="w-4 h-4" />
+                <span className="text-sm">Company</span>
+              </div>
+              <span className="text-sm text-foreground">{employee.company}</span>
             </div>
-            {managerEmployee ? (
-              <EmployeeTag 
-                employeeId={managerEmployee.id} 
-                employeeName={managerEmployee.name}
-                role={managerEmployee.role}
-              />
-            ) : (
-              <EditableProperty
-                value={editableEmployee.manager}
-                onChange={(value) => updateProperty('manager', value)}
-              />
-            )}
-          </div>
+          )}
 
           {/* Location */}
           <div className="flex items-center gap-6">
@@ -741,6 +621,17 @@ const EmployeeProfile = () => {
             />
           </div>
 
+          {/* Notes */}
+          {employee.notes && (
+            <div className="flex items-start gap-6">
+              <div className="flex items-center gap-2 text-muted-foreground w-44">
+                <FileText className="w-4 h-4" />
+                <span className="text-sm">Notes</span>
+              </div>
+              <span className="text-sm text-foreground">{employee.notes}</span>
+            </div>
+          )}
+
           {/* Add a property button */}
           <button className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mt-2">
             <span className="text-lg leading-none">+</span>
@@ -771,26 +662,7 @@ const EmployeeProfile = () => {
         {/* Comments Section */}
         <div className="mb-8">
           <h3 className="text-sm font-medium text-foreground mb-3">Comments</h3>
-          {completedInterviews.length > 0 ? (
-            <div className="flex items-start gap-3 mb-3">
-              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
-                AI
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">AI Assistant</span>
-                  <span className="text-xs text-muted-foreground">
-                    {latestCompletedInterview ? new Date(latestCompletedInterview.date).toLocaleDateString() : ''}
-                  </span>
-                </div>
-                <p className="text-sm text-foreground">
-                  Interview completed. {latestCompletedInterview?.summary || 'Insights synthesized from conversation.'}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground mb-3">No interview data available yet.</p>
-          )}
+          <p className="text-sm text-muted-foreground mb-3">No interview data available yet.</p>
           <div className="flex items-center gap-3 text-muted-foreground">
             <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
               ?
@@ -809,205 +681,69 @@ const EmployeeProfile = () => {
           </h2>
 
           {/* Interview Summary */}
-          <CollapsibleSection 
-            title="Interview Coverage" 
+          <CollapsibleSection
+            title="Interview Coverage"
             icon={<MessageSquare className="w-5 h-5" />}
-            badge={`${completedInterviews.length} interview${completedInterviews.length !== 1 ? 's' : ''}`}
+            badge="0 interviews"
             defaultOpen={true}
           >
-            {completedInterviews.length > 0 ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div className="p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground">Total Interviews</p>
-                    <p className="font-semibold text-foreground">{interviewCoverage.totalInterviews}</p>
-                  </div>
-                  <div className="p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground">Response Depth</p>
-                    <p className={`font-mono ${getDepthColor(interviewCoverage.averageDepth)}`}>
-                      {getDepthIndicator(interviewCoverage.averageDepth)} {getDepthLabel(interviewCoverage.averageDepth)}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground">Topics Discussed</p>
-                    <p className="font-semibold text-foreground">{interviewCoverage.topicsDiscussed}</p>
-                  </div>
-                  <div className="p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground">Usable Quotes</p>
-                    <p className="font-semibold text-foreground">{interviewCoverage.totalQuotes}</p>
-                  </div>
-                </div>
-
-                {/* Interview History */}
-                <div className="space-y-2">
-                  <p className="font-semibold text-foreground">Interview History:</p>
-                  {interviewLogs.map((log) => (
-                    <div 
-                      key={log.id} 
-                      className="p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => setSelectedInterview(log)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            log.status === 'completed' ? 'bg-success/10' : 
-                            log.status === 'scheduled' ? 'bg-warning/10' : 'bg-muted'
-                          }`}>
-                            {log.status === 'completed' ? (
-                              <CheckCircle className="w-4 h-4 text-success" />
-                            ) : log.status === 'scheduled' ? (
-                              <Clock className="w-4 h-4 text-warning" />
-                            ) : (
-                              <XCircle className="w-4 h-4 text-muted-foreground" />
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{log.type}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {log.time}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {log.engagementScore && (
-                            <Badge variant="outline">{log.engagementScore}% engagement</Badge>
-                          )}
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="text-muted-foreground">No interviews completed yet. Schedule an interview to gather insights.</p>
-            )}
+            <p className="text-muted-foreground">No interviews completed yet. Schedule an interview to gather insights.</p>
           </CollapsibleSection>
 
-          {/* Process Involvement - Using ProcessTable */}
-          <CollapsibleSection 
-            title="Process Involvement" 
+          {/* Process Involvement */}
+          <CollapsibleSection
+            title="Process Involvement"
             icon={<Workflow className="w-5 h-5" />}
-            badge={employeeProcesses.length}
+            badge={processes.length}
             defaultOpen={true}
           >
-            {employeeProcesses.length > 0 ? (
-              <ProcessTable 
-                processes={employeeProcesses}
-                onProcessClick={(process) => navigate(`/processes/${process.id}`)}
-              />
+            {processes.length > 0 ? (
+              <div className="space-y-2">
+                {processes.map((process) => (
+                  <div
+                    key={process.id}
+                    className="p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                    onClick={() => navigate(`/processes/${process.id}`)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{process.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {process.department} - {process.steps} steps, {process.employees} employees
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">
+                          {process.automation_level}% automated
+                        </Badge>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <p className="text-muted-foreground">No process involvement recorded yet.</p>
             )}
           </CollapsibleSection>
 
-          {/* Synthesized Insights */}
-          {employeeInsights.length > 0 && (
-            <CollapsibleSection 
-              title="Synthesized Insights" 
-              icon={<Lightbulb className="w-5 h-5" />}
-              badge={employeeInsights.length}
-            >
-              <ul className="space-y-3 list-disc list-outside pl-5">
-                {employeeInsights.map((insight, index) => (
-                  <li key={index} className="text-foreground">
-                    <span className="font-medium">{getCategoryLabel(insight.category)}:</span>{" "}
-                    {insight.summary}
-                  </li>
-                ))}
-              </ul>
-            </CollapsibleSection>
-          )}
-
           {/* Dependencies */}
-          <CollapsibleSection 
-            title="Dependencies" 
+          <CollapsibleSection
+            title="Dependencies"
             icon={<Users className="w-5 h-5" />}
           >
-            <div className="space-y-4">
-              {/* Upstream Dependencies */}
-              <div>
-                <p className="font-semibold text-foreground mb-2">Upstream (receives work from):</p>
-                <ul className="space-y-2 list-disc list-outside pl-5">
-                  {managerEmployee && (
-                    <li className="text-foreground">
-                      <EmployeeTag 
-                        employeeId={managerEmployee.id} 
-                        employeeName={managerEmployee.name}
-                        role={managerEmployee.role}
-                      />
-                      <span className="text-muted-foreground ml-2">— Assigns tasks and provides strategic direction</span>
-                    </li>
-                  )}
-                  <li className="text-foreground">
-                    <EmployeeTag 
-                      employeeId="mike-chen" 
-                      employeeName="Mike Chen"
-                      role="Sales Lead"
-                    />
-                    <span className="text-muted-foreground ml-2">— Sends closed deals for order processing</span>
-                  </li>
-                  <li className="text-foreground">
-                    <EmployeeTag 
-                      employeeId="amy-torres" 
-                      employeeName="Amy Torres"
-                      role="Customer Success"
-                    />
-                    <span className="text-muted-foreground ml-2">— Provides customer requirements and special requests</span>
-                  </li>
-                </ul>
-              </div>
-              
-              {/* Downstream Dependencies */}
-              <div>
-                <p className="font-semibold text-foreground mb-2">Downstream (sends work to):</p>
-                <ul className="space-y-2 list-disc list-outside pl-5">
-                  <li className="text-foreground">
-                    <EmployeeTag 
-                      employeeId="kevin-brown" 
-                      employeeName="Kevin Brown"
-                      role="Warehouse Manager"
-                    />
-                    <span className="text-muted-foreground ml-2">— Receives processed orders for fulfillment</span>
-                  </li>
-                  <li className="text-foreground">
-                    <EmployeeTag 
-                      employeeId="jennifer-white" 
-                      employeeName="Jennifer White"
-                      role="AP Specialist"
-                    />
-                    <span className="text-muted-foreground ml-2">— Receives order data for invoice matching</span>
-                  </li>
-                  <li className="text-foreground">
-                    <EmployeeTag 
-                      employeeId="david-kim" 
-                      employeeName="David Kim"
-                      role="Support Lead"
-                    />
-                    <span className="text-muted-foreground ml-2">— Receives order status updates for customer inquiries</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
+            <p className="text-muted-foreground">No dependencies recorded yet.</p>
           </CollapsibleSection>
 
           {/* Knowledge Gaps */}
-          {knowledgeGaps.length > 0 && (
-            <CollapsibleSection 
-              title="Knowledge Gaps" 
-              icon={<HelpCircle className="w-5 h-5" />}
-              badge={knowledgeGaps.length}
-            >
-              <p className="text-sm text-muted-foreground mb-3">
-                These areas weren't fully explored and should be covered in the next interview:
-              </p>
-              <ul className="list-disc list-inside space-y-2 text-foreground">
-                {knowledgeGaps.map((gap, idx) => (
-                  <li key={idx}>{gap}</li>
-                ))}
-              </ul>
-            </CollapsibleSection>
-          )}
+          <CollapsibleSection
+            title="Knowledge Gaps"
+            icon={<HelpCircle className="w-5 h-5" />}
+          >
+            <p className="text-sm text-muted-foreground">
+              Complete an interview to identify knowledge gaps.
+            </p>
+          </CollapsibleSection>
 
         </div>
 
@@ -1076,7 +812,7 @@ const EmployeeProfile = () => {
                           </h5>
                           <ul className="text-sm text-muted-foreground space-y-1">
                             {selectedInterview.insights.improvements.map((item, i) => (
-                              <li key={i}>• {item}</li>
+                              <li key={i}>* {item}</li>
                             ))}
                           </ul>
                         </div>
@@ -1089,7 +825,7 @@ const EmployeeProfile = () => {
                           </h5>
                           <ul className="text-sm text-muted-foreground space-y-1">
                             {selectedInterview.insights.concerns.map((item, i) => (
-                              <li key={i}>• {item}</li>
+                              <li key={i}>* {item}</li>
                             ))}
                           </ul>
                         </div>
@@ -1102,7 +838,7 @@ const EmployeeProfile = () => {
                           </h5>
                           <ul className="text-sm text-muted-foreground space-y-1">
                             {selectedInterview.insights.strengths.map((item, i) => (
-                              <li key={i}>• {item}</li>
+                              <li key={i}>* {item}</li>
                             ))}
                           </ul>
                         </div>
