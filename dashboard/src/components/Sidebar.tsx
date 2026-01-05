@@ -5,9 +5,7 @@ import {
   Settings,
   ChevronLeft,
   LayoutDashboard,
-  Database,
-  Bell,
-  User
+  Database
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -25,11 +23,9 @@ const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
     { id: 'processes', label: 'Processes', icon: Building2 },
     { id: 'employees', label: 'Employees', icon: Users },
     { id: 'data-hub', label: 'Data Hub', icon: Database },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
   ];
 
   const bottomNavItems = [
-    { id: 'profile', label: 'Profile', icon: User },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
