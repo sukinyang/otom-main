@@ -1,44 +1,68 @@
-import { Bell, Search, User } from 'lucide-react'
-import { useAuth0 } from '@auth0/auth0-react'
+import React from 'react';
+import { User, Bell, Settings, Search, ChevronDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-export default function Header() {
-  const { user } = useAuth0()
-
+const Header = () => {
   return (
-    <header className="h-14 bg-white border-b border-slate-200 px-6 flex items-center justify-between">
-      {/* Search */}
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-        <input
-          type="text"
-          placeholder="Search sessions, reports..."
-          className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-700 focus:border-transparent transition-all"
-        />
-      </div>
+    <header className="bg-card border-b border-border px-6 py-3 fixed top-0 left-0 right-0 z-30">
+      <div className="flex items-center justify-between">
+        {/* Search Bar */}
+        <div className="relative flex-1 max-w-md ml-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search sessions, reports..."
+            className="pl-10 bg-background border-border h-10 w-full"
+          />
+        </div>
 
-      {/* Right side */}
-      <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-          <Bell size={20} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
-
-        {/* User */}
         <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-sm font-medium text-slate-900">{user?.name || 'User'}</p>
-            <p className="text-xs text-slate-500">{user?.email || ''}</p>
-          </div>
-          {user?.picture ? (
-            <img src={user.picture} alt={user.name || 'User'} className="w-9 h-9 rounded-full" />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center">
-              <User size={18} className="text-slate-600" />
-            </div>
-          )}
+          {/* Notifications */}
+          <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
+          </Button>
+
+          {/* User Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-3 px-3 hover:bg-muted">
+                <div className="text-right hidden sm:block">
+                  <p className="text-sm font-medium text-foreground">Admin User</p>
+                  <p className="text-xs text-muted-foreground">admin@otom.ai</p>
+                </div>
+                <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-primary" />
+                </div>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem>
+                <User className="w-4 h-4 mr-2" />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive">
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
-  )
-}
+  );
+};
+
+export default Header;

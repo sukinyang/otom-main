@@ -1,47 +1,32 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import Layout from './components/Layout'
-import ProtectedRoute from './components/ProtectedRoute'
-import Login from './pages/Login'
-import Overview from './pages/Overview'
-import Sessions from './pages/Sessions'
-import Consultations from './pages/Consultations'
-import ProcessMaps from './pages/ProcessMaps'
-import Reports from './pages/Reports'
-import Processes from './pages/Processes'
-import Insights from './pages/Insights'
-import Employees from './pages/Employees'
-import Messages from './pages/Messages'
-import Settings from './pages/Settings'
 
-function App() {
-  return (
-    <Routes>
-      {/* Public route */}
-      <Route path="/login" element={<Login />} />
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Index from "./pages/Index";
+import EmployeeProfile from "./pages/EmployeeProfile";
+import Terms from "./pages/Terms";
+import NotFound from "./pages/NotFound";
 
-      {/* Protected routes */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="/overview" replace />} />
-        <Route path="overview" element={<Overview />} />
-        <Route path="sessions" element={<Sessions />} />
-        <Route path="consultations" element={<Consultations />} />
-        <Route path="process-maps" element={<ProcessMaps />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="processes" element={<Processes />} />
-        <Route path="insights" element={<Insights />} />
-        <Route path="employees" element={<Employees />} />
-        <Route path="messages" element={<Messages />} />
-        <Route path="settings" element={<Settings />} />
-      </Route>
-    </Routes>
-  )
-}
+const queryClient = new QueryClient();
 
-export default App
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/employees/:employeeId" element={<EmployeeProfile />} />
+          <Route path="/terms" element={<Terms />} />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
+
+export default App;

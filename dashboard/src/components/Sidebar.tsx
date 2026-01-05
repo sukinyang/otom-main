@@ -1,149 +1,92 @@
-import { NavLink } from 'react-router-dom'
-import { useAuth0 } from '@auth0/auth0-react'
-import {
-  LayoutGrid,
-  MessageSquare,
-  FileText,
-  Map,
-  FileBarChart,
-  GitBranch,
-  Lightbulb,
-  Users,
-  MessageCircle,
-  Settings,
-  HelpCircle,
-  LogOut,
-  ChevronLeft
-} from 'lucide-react'
-import { useState } from 'react'
-import clsx from 'clsx'
+import React, { useState } from 'react';
+import { 
+  Users, 
+  Building2, 
+  Settings, 
+  ChevronLeft,
+  LayoutDashboard,
+  Database
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-const mainNavItems = [
-  { path: '/overview', label: 'Overview', icon: LayoutGrid },
-  { path: '/sessions', label: 'Sessions', icon: MessageSquare },
-  { path: '/consultations', label: 'Consultations', icon: FileText },
-  { path: '/process-maps', label: 'Process Maps', icon: Map },
-  { path: '/reports', label: 'Reports', icon: FileBarChart },
-]
+interface SidebarProps {
+  activeView: string;
+  onViewChange: (view: string) => void;
+}
 
-const secondaryNavItems = [
-  { path: '/processes', label: 'Processes', icon: GitBranch },
-  { path: '/insights', label: 'Insights', icon: Lightbulb },
-  { path: '/employees', label: 'Employees', icon: Users },
-  { path: '/messages', label: 'Messages', icon: MessageCircle },
-]
+const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
-const bottomNavItems = [
-  { path: '/settings', label: 'Settings', icon: Settings },
-  { path: '/help', label: 'Help', icon: HelpCircle },
-]
-
-export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false)
-  const { logout, user } = useAuth0()
+  const navigationItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'processes', label: 'Processes', icon: Building2 },
+    { id: 'employees', label: 'Employees', icon: Users },
+    { id: 'data-hub', label: 'Data Hub', icon: Database },
+  ];
 
   return (
-    <aside className={clsx(
-      'bg-white text-slate-900 flex flex-col transition-all duration-300 border-r border-slate-200',
-      collapsed ? 'w-20' : 'w-56'
+    <div className={cn(
+      "bg-sidebar border-r border-sidebar-border fixed left-0 top-0 h-screen flex flex-col z-40 transition-all duration-300",
+      isCollapsed ? "w-16" : "w-64"
     )}>
       {/* Logo */}
-      <div className="h-14 flex items-center justify-between px-4 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          {collapsed ? (
-            <img
-              src="/otom-icon.svg"
-              alt="Otom"
-              className="w-8 h-8"
-            />
-          ) : (
-            <img
-              src="/otom-logo-black.png"
-              alt="Otom"
-              className="h-7"
-            />
+      <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+            <span className="text-primary-foreground font-display font-bold text-sm">O</span>
+          </div>
+          {!isCollapsed && (
+            <span className="font-display font-semibold text-lg text-sidebar-foreground">otom</span>
           )}
         </div>
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-1 rounded hover:bg-slate-100 transition-colors"
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent"
+          onClick={() => setIsCollapsed(!isCollapsed)}
         >
-          <ChevronLeft size={18} className={clsx('transition-transform', collapsed && 'rotate-180')} />
-        </button>
+          <ChevronLeft className={cn("w-4 h-4 transition-transform", isCollapsed && "rotate-180")} />
+        </Button>
       </div>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 py-4 px-2 space-y-1">
-        {mainNavItems.map(({ path, label, icon: Icon }) => (
-          <NavLink
-            key={path}
-            to={path}
-            className={({ isActive }) => clsx(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
-              isActive
-                ? 'bg-slate-900 text-white'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            )}
-          >
-            <Icon size={20} className="flex-shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">{label}</span>}
-          </NavLink>
-        ))}
-
-        {/* Divider */}
-        <div className="my-4 border-t border-slate-200" />
-
-        {secondaryNavItems.map(({ path, label, icon: Icon }) => (
-          <NavLink
-            key={path}
-            to={path}
-            className={({ isActive }) => clsx(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
-              isActive
-                ? 'bg-slate-900 text-white'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            )}
-          >
-            <Icon size={20} className="flex-shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">{label}</span>}
-          </NavLink>
-        ))}
-      </nav>
-
-      {/* Bottom Navigation */}
-      <div className="py-4 px-2 border-t border-slate-200 space-y-1">
-        {bottomNavItems.map(({ path, label, icon: Icon }) => (
-          <NavLink
-            key={path}
-            to={path}
-            className={({ isActive }) => clsx(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
-              isActive
-                ? 'bg-slate-900 text-white'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            )}
-          >
-            <Icon size={20} className="flex-shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">{label}</span>}
-          </NavLink>
-        ))}
-
-        {/* User info */}
-        {user && !collapsed && (
-          <div className="px-3 py-2 mb-2">
-            <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
-            <p className="text-xs text-slate-500 truncate">{user.email}</p>
-          </div>
-        )}
-
-        <button
-          onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-        >
-          <LogOut size={20} className="flex-shrink-0" />
-          {!collapsed && <span className="text-sm font-medium">Sign Out</span>}
-        </button>
+      {/* Navigation */}
+      <div className="flex-1 p-3">
+        <nav className="space-y-1">
+          {navigationItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onViewChange(item.id)}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                activeView === item.id
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+              )}
+            >
+              <item.icon className="w-5 h-5 flex-shrink-0" />
+              {!isCollapsed && <span>{item.label}</span>}
+            </button>
+          ))}
+        </nav>
       </div>
-    </aside>
-  )
-}
+
+      {/* Footer */}
+      <div className="p-3 border-t border-sidebar-border">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className={cn(
+            "w-full text-sidebar-foreground hover:bg-sidebar-accent",
+            isCollapsed ? "justify-center px-0" : "justify-start gap-3"
+          )}
+        >
+          <Settings className="w-5 h-5" />
+          {!isCollapsed && <span>Settings</span>}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+export default Sidebar;
