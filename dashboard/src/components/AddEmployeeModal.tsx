@@ -6,8 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, Upload, User, FileText, Plus, Check, X } from 'lucide-react';
+import { Download, Upload, User, FileText, Plus, Check, X, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import { api } from '@/services/api';
+import { toast } from 'sonner';
 
 interface AddEmployeeModalProps {
   open: boolean;
@@ -25,6 +27,8 @@ interface EmployeeFormData {
 const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModalProps) => {
   const [activeTab, setActiveTab] = useState('individual');
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<{ name: string; email: string; department: string; position: string }[]>([]);
   const [departments, setDepartments] = useState([
     'Operations', 'Sales', 'HR', 'Finance', 'IT', 'Marketing', 
     'Customer Success', 'Product', 'Engineering', 'Leadership'
@@ -102,16 +106,105 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
     const file = event.target.files?.[0];
     if (file) {
       setCsvFile(file);
+
+      // Parse CSV for preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim());
+
+        if (lines.length < 2) {
+          toast.error('CSV file must have a header row and at least one data row');
+          setCsvFile(null);
+          return;
+        }
+
+        // Parse header
+        const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+        const nameIdx = header.findIndex(h => h === 'name');
+        const emailIdx = header.findIndex(h => h === 'email');
+        const deptIdx = header.findIndex(h => h === 'department');
+        const posIdx = header.findIndex(h => h === 'position');
+
+        if (nameIdx === -1 || emailIdx === -1) {
+          toast.error('CSV must have Name and Email columns');
+          setCsvFile(null);
+          return;
+        }
+
+        // Parse data rows
+        const employees = lines.slice(1).map(line => {
+          // Handle quoted values with commas
+          const values: string[] = [];
+          let current = '';
+          let inQuotes = false;
+
+          for (const char of line) {
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              values.push(current.trim().replace(/"/g, ''));
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          values.push(current.trim().replace(/"/g, ''));
+
+          return {
+            name: values[nameIdx] || '',
+            email: values[emailIdx] || '',
+            department: deptIdx !== -1 ? values[deptIdx] || '' : '',
+            position: posIdx !== -1 ? values[posIdx] || '' : ''
+          };
+        }).filter(emp => emp.name && emp.email);
+
+        setCsvPreview(employees);
+        toast.success(`Found ${employees.length} employee(s) in CSV`);
+      };
+      reader.readAsText(file);
     }
+
+    // Reset the input so the same file can be selected again
+    event.target.value = '';
   };
 
-  const processCsvUpload = () => {
-    if (!csvFile) return;
-    
-    console.log('Processing CSV file:', csvFile.name);
-    // Here you would typically parse the CSV and send the data to your backend
-    setCsvFile(null);
-    onOpenChange(false);
+  const processCsvUpload = async () => {
+    if (!csvFile || csvPreview.length === 0) return;
+
+    setIsUploading(true);
+
+    try {
+      // Map CSV data to employee format
+      const employees = csvPreview.map(emp => ({
+        name: emp.name,
+        email: emp.email,
+        department: emp.department || undefined,
+        role: emp.position || undefined,
+        phone_number: '', // Phone number not in CSV template
+        status: 'active'
+      }));
+
+      const result = await api.importEmployees(employees);
+
+      if (result.success) {
+        toast.success(`Successfully imported ${result.imported} employee(s)${result.skipped > 0 ? `, ${result.skipped} skipped` : ''}`);
+        if (result.errors && result.errors.length > 0) {
+          result.errors.forEach(err => toast.error(err));
+        }
+      } else {
+        toast.error('Failed to import employees');
+      }
+
+      setCsvFile(null);
+      setCsvPreview([]);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('CSV upload error:', error);
+      toast.error('Failed to upload employees. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -299,13 +392,16 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
                         className="hidden"
                         id="csv-upload"
                       />
-                      <label htmlFor="csv-upload">
-                        <Button type="button" variant="outline" className="cursor-pointer flex items-center gap-2">
-                          <Upload className="w-4 h-4" />
-                          Choose CSV File
-                        </Button>
-                      </label>
-                      
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="cursor-pointer flex items-center gap-2"
+                        onClick={() => document.getElementById('csv-upload')?.click()}
+                      >
+                        <Upload className="w-4 h-4" />
+                        Choose CSV File
+                      </Button>
+
                       {csvFile && (
                         <div className="text-sm text-green-600">
                           Selected: {csvFile.name}
@@ -316,12 +412,39 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
                 </div>
               </div>
 
+              {/* CSV Preview */}
+              {csvPreview.length > 0 && (
+                <div className="border rounded-lg p-4 max-h-48 overflow-y-auto">
+                  <h4 className="text-sm font-medium mb-2">Preview ({csvPreview.length} employees)</h4>
+                  <div className="space-y-2">
+                    {csvPreview.slice(0, 5).map((emp, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-sm">
+                        <span className="font-medium">{emp.name}</span>
+                        <span className="text-gray-400">|</span>
+                        <span className="text-gray-600">{emp.email}</span>
+                        {emp.department && (
+                          <>
+                            <span className="text-gray-400">|</span>
+                            <span className="text-gray-600">{emp.department}</span>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                    {csvPreview.length > 5 && (
+                      <div className="text-xs text-gray-500">
+                        ...and {csvPreview.length - 5} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-blue-900 mb-2">CSV Format Requirements:</h4>
                 <ul className="text-xs text-blue-800 space-y-1">
                   <li>• Header row: Name, Position, Department, Email</li>
                   <li>• Each employee on a separate row</li>
-                  <li>• All fields are required</li>
+                  <li>• Name and Email are required</li>
                   <li>• Email addresses must be valid</li>
                 </ul>
               </div>
@@ -330,12 +453,19 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button 
-                  type="button" 
+                <Button
+                  type="button"
                   onClick={processCsvUpload}
-                  disabled={!csvFile}
+                  disabled={!csvFile || csvPreview.length === 0 || isUploading}
                 >
-                  Upload Employees
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    `Upload ${csvPreview.length > 0 ? csvPreview.length : ''} Employee${csvPreview.length !== 1 ? 's' : ''}`
+                  )}
                 </Button>
               </div>
             </div>
