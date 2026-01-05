@@ -28,7 +28,7 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
   const [activeTab, setActiveTab] = useState('individual');
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [csvPreview, setCsvPreview] = useState<{ name: string; email: string; department: string; position: string }[]>([]);
+  const [csvPreview, setCsvPreview] = useState<{ name: string; phone: string; email: string; department: string; position: string }[]>([]);
   const [departments, setDepartments] = useState([
     'Operations', 'Sales', 'HR', 'Finance', 'IT', 'Marketing', 
     'Customer Success', 'Product', 'Engineering', 'Leadership'
@@ -92,7 +92,7 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
   };
 
   const generateCsvTemplate = () => {
-    const csvContent = 'Name,Position,Department,Email\n"John Doe","Software Engineer","Engineering","john.doe@company.com"\n"Jane Smith","Product Manager","Product","jane.smith@company.com"';
+    const csvContent = 'Name,Phone,Position,Department,Email\n"John Doe","+1234567890","Software Engineer","Engineering","john.doe@company.com"\n"Jane Smith","+0987654321","Product Manager","Product","jane.smith@company.com"';
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -122,12 +122,13 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
         // Parse header
         const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
         const nameIdx = header.findIndex(h => h === 'name');
+        const phoneIdx = header.findIndex(h => h === 'phone');
         const emailIdx = header.findIndex(h => h === 'email');
         const deptIdx = header.findIndex(h => h === 'department');
         const posIdx = header.findIndex(h => h === 'position');
 
-        if (nameIdx === -1 || emailIdx === -1) {
-          toast.error('CSV must have Name and Email columns');
+        if (nameIdx === -1 || phoneIdx === -1) {
+          toast.error('CSV must have Name and Phone columns');
           setCsvFile(null);
           return;
         }
@@ -153,11 +154,12 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
 
           return {
             name: values[nameIdx] || '',
-            email: values[emailIdx] || '',
+            phone: values[phoneIdx] || '',
+            email: emailIdx !== -1 ? values[emailIdx] || '' : '',
             department: deptIdx !== -1 ? values[deptIdx] || '' : '',
             position: posIdx !== -1 ? values[posIdx] || '' : ''
           };
-        }).filter(emp => emp.name && emp.email);
+        }).filter(emp => emp.name && emp.phone);
 
         setCsvPreview(employees);
         toast.success(`Found ${employees.length} employee(s) in CSV`);
@@ -178,10 +180,10 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
       // Map CSV data to employee format
       const employees = csvPreview.map(emp => ({
         name: emp.name,
-        email: emp.email,
+        phone_number: emp.phone,
+        email: emp.email || undefined,
         department: emp.department || undefined,
         role: emp.position || undefined,
-        phone_number: '', // Phone number not in CSV template
         status: 'active'
       }));
 
@@ -418,10 +420,16 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
                   <h4 className="text-sm font-medium mb-2">Preview ({csvPreview.length} employees)</h4>
                   <div className="space-y-2">
                     {csvPreview.slice(0, 5).map((emp, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-sm">
+                      <div key={idx} className="flex items-center gap-2 text-sm flex-wrap">
                         <span className="font-medium">{emp.name}</span>
                         <span className="text-gray-400">|</span>
-                        <span className="text-gray-600">{emp.email}</span>
+                        <span className="text-gray-600">{emp.phone}</span>
+                        {emp.email && (
+                          <>
+                            <span className="text-gray-400">|</span>
+                            <span className="text-gray-600">{emp.email}</span>
+                          </>
+                        )}
                         {emp.department && (
                           <>
                             <span className="text-gray-400">|</span>
@@ -442,10 +450,10 @@ const AddEmployeeModal = ({ open, onOpenChange, onAddEmployee }: AddEmployeeModa
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-blue-900 mb-2">CSV Format Requirements:</h4>
                 <ul className="text-xs text-blue-800 space-y-1">
-                  <li>• Header row: Name, Position, Department, Email</li>
+                  <li>• Header row: Name, Phone, Position, Department, Email</li>
                   <li>• Each employee on a separate row</li>
-                  <li>• Name and Email are required</li>
-                  <li>• Email addresses must be valid</li>
+                  <li>• Name and Phone are required</li>
+                  <li>• Phone numbers should include country code (e.g., +1234567890)</li>
                 </ul>
               </div>
 

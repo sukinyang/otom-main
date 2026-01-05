@@ -262,21 +262,21 @@ async def import_employees(request: Request):
 
         for emp in employees:
             try:
-                # Validate required fields - name is required, phone or email needed
+                # Validate required fields - name and phone are required
                 if not emp.get("name"):
                     skipped += 1
                     errors.append(f"Missing name for employee")
                     continue
 
-                if not emp.get("phone_number") and not emp.get("email"):
+                if not emp.get("phone_number"):
                     skipped += 1
-                    errors.append(f"Missing phone or email for: {emp.get('name', 'Unknown')}")
+                    errors.append(f"Missing phone number for: {emp.get('name', 'Unknown')}")
                     continue
 
                 # Prepare employee data
                 employee_data = {
                     "name": emp.get("name", "").strip(),
-                    "phone_number": emp.get("phone_number", "").strip() if emp.get("phone_number") else "",
+                    "phone_number": emp.get("phone_number", "").strip(),
                     "email": emp.get("email", "").strip() or None,
                     "company": emp.get("company", "").strip() or None,
                     "department": emp.get("department", "").strip() or None,
