@@ -8,6 +8,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -756,6 +757,242 @@ async def trigger_pending_calls():
     except Exception as e:
         logger.error(f"Error triggering scheduled calls: {e}")
         return {"status": "error", "message": str(e)}
+
+# ============================================
+# Public SMS Consent Page (for TFV Submission)
+# ============================================
+@app.get("/sms-consent", response_class=HTMLResponse)
+async def sms_consent_page():
+    """
+    Public SMS consent page for Twilio Toll-Free Verification (TFV).
+    Screenshot this page for your TFV submission proof of consent.
+    """
+    privacy_url = os.getenv("PRIVACY_URL", "https://otom.ai/privacy")
+    terms_url = os.getenv("TERMS_URL", "https://otom.ai/terms")
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Otom SMS Consent</title>
+        <style>
+            * {{
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }}
+            .container {{
+                background: white;
+                border-radius: 16px;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                max-width: 500px;
+                width: 100%;
+                padding: 40px;
+            }}
+            .logo {{
+                text-align: center;
+                margin-bottom: 24px;
+            }}
+            .logo h1 {{
+                font-size: 32px;
+                color: #1a1a2e;
+                font-weight: 700;
+            }}
+            .logo span {{
+                color: #667eea;
+            }}
+            h2 {{
+                color: #1a1a2e;
+                font-size: 24px;
+                margin-bottom: 16px;
+                text-align: center;
+            }}
+            .description {{
+                color: #4a5568;
+                line-height: 1.6;
+                margin-bottom: 24px;
+                text-align: center;
+            }}
+            .consent-box {{
+                background: #f7fafc;
+                border: 2px solid #e2e8f0;
+                border-radius: 12px;
+                padding: 24px;
+                margin-bottom: 24px;
+            }}
+            .consent-box h3 {{
+                color: #2d3748;
+                font-size: 16px;
+                margin-bottom: 12px;
+            }}
+            .consent-box p {{
+                color: #4a5568;
+                font-size: 14px;
+                line-height: 1.6;
+                margin-bottom: 12px;
+            }}
+            .consent-box ul {{
+                color: #4a5568;
+                font-size: 14px;
+                line-height: 1.8;
+                margin-left: 20px;
+            }}
+            .message-preview {{
+                background: #edf2f7;
+                border-left: 4px solid #667eea;
+                padding: 16px;
+                border-radius: 0 8px 8px 0;
+                margin: 16px 0;
+            }}
+            .message-preview code {{
+                font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+                font-size: 13px;
+                color: #2d3748;
+                white-space: pre-wrap;
+                display: block;
+            }}
+            .keywords {{
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin-top: 16px;
+            }}
+            .keyword {{
+                background: #667eea;
+                color: white;
+                padding: 6px 14px;
+                border-radius: 20px;
+                font-size: 13px;
+                font-weight: 500;
+            }}
+            .keyword.stop {{
+                background: #e53e3e;
+            }}
+            .keyword.help {{
+                background: #38a169;
+            }}
+            .links {{
+                text-align: center;
+                margin-top: 24px;
+                padding-top: 24px;
+                border-top: 1px solid #e2e8f0;
+            }}
+            .links a {{
+                color: #667eea;
+                text-decoration: none;
+                margin: 0 12px;
+                font-size: 14px;
+            }}
+            .links a:hover {{
+                text-decoration: underline;
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 24px;
+                color: #718096;
+                font-size: 12px;
+            }}
+            .badge {{
+                display: inline-block;
+                background: #48bb78;
+                color: white;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 16px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="logo">
+                <h1><span>Otom</span></h1>
+            </div>
+
+            <span class="badge" style="display: block; text-align: center;">TCPA Compliant</span>
+
+            <h2>SMS Communication Consent</h2>
+
+            <p class="description">
+                Otom uses SMS to schedule feedback calls and gather insights.
+                Your consent is required before receiving any messages.
+            </p>
+
+            <div class="consent-box">
+                <h3>How It Works (Double Opt-In)</h3>
+                <p><strong>Step 1:</strong> You receive a consent request message:</p>
+                <div class="message-preview">
+                    <code>Hi [Name]! This is Otom on behalf of [Company].
+
+We'd like to send you occasional texts for feedback & interview scheduling.
+
+Reply YES to opt in. Reply STOP to opt out anytime.
+
+Msg & data rates may apply. Privacy: {privacy_url}</code>
+                </div>
+
+                <p><strong>Step 2:</strong> Only if you reply YES, you'll receive our feedback invitation:</p>
+                <div class="message-preview">
+                    <code>Hi [Name]! This is Otom from [Company].
+
+We're reaching out to learn about your experience and gather feedback.
+
+Would you be available for a quick 15 minute call?
+
+Reply:
+1 - Yes, call me now
+2 - Schedule for later
+3 - Not interested
+
+Reply STOP to opt out. HELP for help.</code>
+                </div>
+            </div>
+
+            <div class="consent-box">
+                <h3>Your Rights</h3>
+                <ul>
+                    <li>Consent is <strong>100% optional</strong> - not required for any service</li>
+                    <li>You can opt out at any time by replying <strong>STOP</strong></li>
+                    <li>Message frequency: ~1-3 messages per feedback session</li>
+                    <li>Standard message and data rates may apply</li>
+                    <li>Your phone number is never shared with third parties</li>
+                </ul>
+
+                <div class="keywords">
+                    <span class="keyword stop">STOP - Unsubscribe</span>
+                    <span class="keyword help">HELP - Get Help</span>
+                    <span class="keyword">START - Re-subscribe</span>
+                </div>
+            </div>
+
+            <div class="links">
+                <a href="{privacy_url}" target="_blank">Privacy Policy</a>
+                <a href="{terms_url}" target="_blank">Terms of Service</a>
+                <a href="mailto:support@otom.ai">Contact Support</a>
+            </div>
+
+            <div class="footer">
+                <p>&copy; 2024 Otom. All rights reserved.</p>
+                <p style="margin-top: 8px;">Business: Otom | support@otom.ai</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
 
 # Include interface routers
 app.include_router(voice_interface.router)
