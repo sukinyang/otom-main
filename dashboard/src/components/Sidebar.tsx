@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  Users, 
-  Building2, 
-  Settings, 
+import {
+  Users,
+  Building2,
+  Settings,
   ChevronLeft,
   LayoutDashboard,
-  Database
+  Database,
+  Bell,
+  User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -23,6 +25,12 @@ const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
     { id: 'processes', label: 'Processes', icon: Building2 },
     { id: 'employees', label: 'Employees', icon: Users },
     { id: 'data-hub', label: 'Data Hub', icon: Database },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+  ];
+
+  const bottomNavItems = [
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   return (
@@ -40,9 +48,9 @@ const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
             <span className="font-display font-semibold text-lg text-sidebar-foreground">otom</span>
           )}
         </div>
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent"
           onClick={() => setIsCollapsed(!isCollapsed)}
         >
@@ -72,18 +80,22 @@ const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-sidebar-border">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className={cn(
-            "w-full text-sidebar-foreground hover:bg-sidebar-accent",
-            isCollapsed ? "justify-center px-0" : "justify-start gap-3"
-          )}
-        >
-          <Settings className="w-5 h-5" />
-          {!isCollapsed && <span>Settings</span>}
-        </Button>
+      <div className="p-3 border-t border-sidebar-border space-y-1">
+        {bottomNavItems.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => onViewChange(item.id)}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+              activeView === item.id
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+            )}
+          >
+            <item.icon className="w-5 h-5 flex-shrink-0" />
+            {!isCollapsed && <span>{item.label}</span>}
+          </button>
+        ))}
       </div>
     </div>
   );

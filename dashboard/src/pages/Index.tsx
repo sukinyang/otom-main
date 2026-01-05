@@ -9,6 +9,9 @@ import Processes from './Processes';
 import Dashboard from './Dashboard';
 import Employees from './Employees';
 import DataHub from './DataHub';
+import Settings from './Settings';
+import Notifications from './Notifications';
+import Profile from './Profile';
 
 const Index = () => {
   const location = useLocation();
@@ -44,6 +47,12 @@ const Index = () => {
         return <Analytics />;
       case 'data-hub':
         return <DataHub />;
+      case 'settings':
+        return <Settings />;
+      case 'notifications':
+        return <Notifications />;
+      case 'profile':
+        return <Profile />;
       default:
         return <Dashboard onNavigate={setActiveView} />;
     }
@@ -53,7 +62,7 @@ const Index = () => {
     <div className="min-h-screen bg-background w-full">
       <Sidebar activeView={activeView} onViewChange={setActiveView} />
       <div className="ml-64 min-h-screen">
-        <Header />
+        <Header onNavigate={setActiveView} />
         <main className="pt-16 p-6">
           {renderMainContent()}
         </main>

@@ -11,7 +11,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const Header = () => {
+interface HeaderProps {
+  onNavigate?: (view: string) => void;
+}
+
+const Header = ({ onNavigate }: HeaderProps) => {
   const { user, logout } = useAuth0();
 
   const handleLogout = () => {
@@ -33,7 +37,12 @@ const Header = () => {
 
         <div className="flex items-center gap-3">
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative text-muted-foreground hover:text-foreground"
+            onClick={() => onNavigate?.('notifications')}
+          >
             <Bell className="w-5 h-5" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
           </Button>
@@ -60,11 +69,11 @@ const Header = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNavigate?.('profile')}>
                 <User className="w-4 h-4 mr-2" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onNavigate?.('settings')}>
                 <Settings className="w-4 h-4 mr-2" />
                 Settings
               </DropdownMenuItem>
