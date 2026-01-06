@@ -229,6 +229,12 @@ class ApiService {
     return this.fetch<CallStats>(`/voice/calls/stats?days=${days}`)
   }
 
+  async getEmployeeCallSessions(phoneNumber: string) {
+    return this.fetch<{ calls: CallSession[]; total: number }>(
+      `/voice/calls?phone_number=${encodeURIComponent(phoneNumber)}`
+    )
+  }
+
   // Employees
   async getEmployees() {
     return this.fetch<Employee[]>('/employees')

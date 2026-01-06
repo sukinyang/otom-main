@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import Header from '@/components/Header';
 import AddContextModal from '@/components/AddContextModal';
-import { api, Employee, Process } from '@/services/api';
+import { api, Employee, Process, CallSession } from '@/services/api';
 
 // Local type definitions for interview-related data
 type InterviewDepth = 'deep-dive' | 'detailed' | 'brief' | 'passing' | 'dismissive';
@@ -239,10 +239,12 @@ const EmployeeProfile = () => {
   // API data state
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [processes, setProcesses] = useState<Process[]>([]);
+  const [callSessions, setCallSessions] = useState<CallSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedInterview, setSelectedInterview] = useState<InterviewLog | null>(null);
+  const [selectedCallSession, setSelectedCallSession] = useState<CallSession | null>(null);
   const [isContextModalOpen, setIsContextModalOpen] = useState(false);
 
   // Editable employee state
@@ -256,7 +258,7 @@ const EmployeeProfile = () => {
     manager: ''
   });
 
-  // Fetch employee and processes from API
+  // Fetch employee, processes, and call sessions from API
   useEffect(() => {
     const fetchData = async () => {
       if (!employeeId) {
@@ -276,6 +278,17 @@ const EmployeeProfile = () => {
 
         setEmployee(employeeData);
         setProcesses(processesData);
+
+        // Fetch call sessions if employee has a phone number
+        if (employeeData.phone_number) {
+          try {
+            const callData = await api.getEmployeeCallSessions(employeeData.phone_number);
+            setCallSessions(callData.calls || []);
+          } catch (callErr) {
+            console.warn('Could not fetch call sessions:', callErr);
+            setCallSessions([]);
+          }
+        }
 
         // Initialize editable state from API data
         setEditableEmployee({
@@ -680,14 +693,89 @@ const EmployeeProfile = () => {
             Employee: {employee.name}
           </h2>
 
-          {/* Interview Summary */}
+          {/* Interview Summary - Real Call Sessions */}
           <CollapsibleSection
             title="Interview Coverage"
             icon={<MessageSquare className="w-5 h-5" />}
-            badge="0 interviews"
+            badge={`${callSessions.filter(c => c.status === 'completed').length} interview${callSessions.filter(c => c.status === 'completed').length !== 1 ? 's' : ''}`}
             defaultOpen={true}
           >
-            <p className="text-muted-foreground">No interviews completed yet. Schedule an interview to gather insights.</p>
+            {callSessions.length > 0 ? (
+              <div className="space-y-4">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="p-3 bg-muted/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground">Total Calls</p>
+                    <p className="font-semibold text-foreground">{callSessions.length}</p>
+                  </div>
+                  <div className="p-3 bg-muted/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground">Completed</p>
+                    <p className="font-semibold text-foreground">{callSessions.filter(c => c.status === 'completed').length}</p>
+                  </div>
+                  <div className="p-3 bg-muted/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground">Avg Duration</p>
+                    <p className="font-semibold text-foreground">
+                      {callSessions.filter(c => c.duration_seconds).length > 0
+                        ? `${Math.round(callSessions.filter(c => c.duration_seconds).reduce((sum, c) => sum + (c.duration_seconds || 0), 0) / callSessions.filter(c => c.duration_seconds).length / 60)} min`
+                        : 'N/A'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-muted/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground">Has Transcript</p>
+                    <p className="font-semibold text-foreground">{callSessions.filter(c => c.transcript).length}</p>
+                  </div>
+                </div>
+
+                {/* Call History */}
+                <div className="space-y-2">
+                  <p className="font-semibold text-foreground">Call History:</p>
+                  {callSessions.map((call) => (
+                    <div
+                      key={call.id}
+                      className="p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => setSelectedCallSession(call)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            call.status === 'completed' ? 'bg-success/10' :
+                            call.status === 'in-progress' ? 'bg-warning/10' : 'bg-muted'
+                          }`}>
+                            {call.status === 'completed' ? (
+                              <CheckCircle className="w-4 h-4 text-success" />
+                            ) : call.status === 'in-progress' ? (
+                              <Clock className="w-4 h-4 text-warning" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {call.direction === 'inbound' ? 'Inbound Call' : 'Outbound Call'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(call.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              {call.duration_seconds && ` • ${Math.round(call.duration_seconds / 60)} min`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {call.transcript && (
+                            <Badge variant="outline" className="text-xs">Has Transcript</Badge>
+                          )}
+                          <Badge variant={call.status === 'completed' ? 'default' : 'secondary'}>
+                            {call.status}
+                          </Badge>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-muted-foreground">No interviews completed yet. Schedule an interview to gather insights.</p>
+            )}
           </CollapsibleSection>
 
           {/* Process Involvement */}
@@ -852,6 +940,86 @@ const EmployeeProfile = () => {
                       <p className="font-semibold text-foreground mb-2">Transcript</p>
                       <div className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
                         {selectedInterview.transcript}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Call Session Detail Modal */}
+        {selectedCallSession && (
+          <Dialog open={!!selectedCallSession} onOpenChange={() => setSelectedCallSession(null)}>
+            <DialogContent className="max-w-3xl max-h-[80vh]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Phone className="w-5 h-5" />
+                  Call Details - {selectedCallSession.direction === 'inbound' ? 'Inbound' : 'Outbound'} Call
+                </DialogTitle>
+              </DialogHeader>
+              <ScrollArea className="h-[60vh] pr-4">
+                <div className="space-y-6">
+                  {/* Meta */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground">Date</p>
+                      <p className="font-medium text-foreground">
+                        {new Date(selectedCallSession.started_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground">Duration</p>
+                      <p className="font-medium text-foreground">
+                        {selectedCallSession.duration_seconds
+                          ? `${Math.floor(selectedCallSession.duration_seconds / 60)}m ${selectedCallSession.duration_seconds % 60}s`
+                          : 'N/A'}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground">Status</p>
+                      <p className="font-medium text-foreground capitalize">{selectedCallSession.status}</p>
+                    </div>
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground">Platform</p>
+                      <p className="font-medium text-foreground capitalize">{selectedCallSession.platform || 'Vapi'}</p>
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  {selectedCallSession.summary && (
+                    <div className="p-4 border border-border rounded-lg">
+                      <p className="font-semibold text-foreground mb-2">AI Summary</p>
+                      <p className="text-foreground">{selectedCallSession.summary}</p>
+                    </div>
+                  )}
+
+                  {/* Transcript */}
+                  {selectedCallSession.transcript ? (
+                    <div className="p-4 border border-border rounded-lg">
+                      <p className="font-semibold text-foreground mb-2">Full Transcript</p>
+                      <div className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed font-mono bg-muted/30 p-4 rounded-lg max-h-[300px] overflow-y-auto">
+                        {selectedCallSession.transcript}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 border border-border rounded-lg bg-muted/20">
+                      <p className="text-muted-foreground text-center">
+                        No transcript available for this call.
+                        {selectedCallSession.status !== 'completed' && ' The call may still be in progress.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Metadata */}
+                  {selectedCallSession.metadata && Object.keys(selectedCallSession.metadata).length > 0 && (
+                    <div className="p-4 border border-border rounded-lg">
+                      <p className="font-semibold text-foreground mb-2">Additional Information</p>
+                      <div className="text-sm text-muted-foreground">
+                        <pre className="whitespace-pre-wrap">
+                          {JSON.stringify(selectedCallSession.metadata, null, 2)}
+                        </pre>
                       </div>
                     </div>
                   )}

@@ -304,6 +304,162 @@ async def import_employees(request: Request):
         logger.error(f"Failed to import employees: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Seed data endpoint for demo
+@app.post("/seed/employees")
+async def seed_employees():
+    """Create 20 sample employees with realistic interview data for demo purposes"""
+    from integrations.supabase_mcp import supabase
+    from datetime import datetime, timedelta
+    import uuid
+
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    # Sample employee data for 20 people
+    sample_employees = [
+        {"name": "Sarah Johnson", "role": "Operations Manager", "department": "Operations", "phone_number": "+15551234001", "email": "sarah.johnson@company.com"},
+        {"name": "Mike Chen", "role": "Sales Director", "department": "Sales", "phone_number": "+15551234002", "email": "mike.chen@company.com"},
+        {"name": "Emma Davis", "role": "HR Specialist", "department": "HR", "phone_number": "+15551234003", "email": "emma.davis@company.com"},
+        {"name": "David Wilson", "role": "Finance Lead", "department": "Finance", "phone_number": "+15551234004", "email": "david.wilson@company.com"},
+        {"name": "Lisa Rodriguez", "role": "IT Manager", "department": "IT", "phone_number": "+15551234005", "email": "lisa.rodriguez@company.com"},
+        {"name": "Tom Anderson", "role": "Marketing Head", "department": "Marketing", "phone_number": "+15551234006", "email": "tom.anderson@company.com"},
+        {"name": "Anna Thompson", "role": "Customer Success Manager", "department": "Customer Success", "phone_number": "+15551234007", "email": "anna.thompson@company.com"},
+        {"name": "James Miller", "role": "Product Manager", "department": "Product", "phone_number": "+15551234008", "email": "james.miller@company.com"},
+        {"name": "Rachel Brown", "role": "Software Engineer", "department": "Engineering", "phone_number": "+15551234009", "email": "rachel.brown@company.com"},
+        {"name": "Kevin Lee", "role": "UX Designer", "department": "Product", "phone_number": "+15551234010", "email": "kevin.lee@company.com"},
+        {"name": "Amanda White", "role": "Sales Representative", "department": "Sales", "phone_number": "+15551234011", "email": "amanda.white@company.com"},
+        {"name": "Robert Garcia", "role": "DevOps Engineer", "department": "Engineering", "phone_number": "+15551234012", "email": "robert.garcia@company.com"},
+        {"name": "Jennifer Adams", "role": "VP of Sales", "department": "Sales", "phone_number": "+15551234013", "email": "jennifer.adams@company.com"},
+        {"name": "Chris Martinez", "role": "Engineering Manager", "department": "Engineering", "phone_number": "+15551234014", "email": "chris.martinez@company.com"},
+        {"name": "Patricia Brown", "role": "CFO", "department": "Finance", "phone_number": "+15551234015", "email": "patricia.brown@company.com"},
+        {"name": "Michael Lee", "role": "Customer Success Lead", "department": "Customer Success", "phone_number": "+15551234016", "email": "michael.lee@company.com"},
+        {"name": "Susan Clark", "role": "CMO", "department": "Marketing", "phone_number": "+15551234017", "email": "susan.clark@company.com"},
+        {"name": "Emily White", "role": "VP of Product", "department": "Product", "phone_number": "+15551234018", "email": "emily.white@company.com"},
+        {"name": "James Thompson", "role": "CTO", "department": "IT", "phone_number": "+15551234019", "email": "james.thompson@company.com"},
+        {"name": "Robert Miller", "role": "HR Director", "department": "HR", "phone_number": "+15551234020", "email": "robert.miller@company.com"},
+    ]
+
+    # Sample transcripts for variety
+    sample_transcripts = [
+        """AI Assistant: Good morning! Thank you for joining today's process audit interview. How are you doing today?
+
+Employee: Good morning! I'm doing well, thank you. Ready to dive in.
+
+AI Assistant: Great to hear. Let's start by discussing your current process workflows. Can you walk me through your typical day-to-day operations?
+
+Employee: Sure. My day usually starts with checking the task queue. I review any overnight requests, flag urgent ones, and then coordinate with the team on priorities.
+
+AI Assistant: That sounds like a structured approach. What would you say are the main challenges you face in this workflow?
+
+Employee: The biggest challenge is definitely the manual data entry between our systems. When something comes in, I have to transfer that information manually, which takes time and sometimes leads to errors.
+
+AI Assistant: I see. How often do these errors occur, and what's the typical impact?
+
+Employee: I'd say maybe 2-3 times a week we catch something that needs correction. Usually it's minor, but it delays things by at least a few hours while we sort it out.
+
+AI Assistant: That's valuable insight. What about team collaboration? How do you coordinate with other departments?
+
+Employee: We've gotten much better at this actually. We have daily standups, and I've set up a Slack channel for real-time updates. The other teams ping me there if there's anything urgent.
+
+AI Assistant: Excellent. Thank you for sharing these insights. Your feedback is incredibly valuable for our process improvement initiatives.""",
+
+        """AI Assistant: Hello! I'm here to conduct your monthly process review. How has your week been?
+
+Employee: It's been busy but productive. We've had some good wins with the new system.
+
+AI Assistant: That's great to hear! Can you tell me more about these wins?
+
+Employee: Well, we finally got the automation working for the reporting module. It used to take me 4 hours every Friday, now it's done in 30 minutes.
+
+AI Assistant: That's a significant improvement! Were there any challenges in implementing this automation?
+
+Employee: Definitely. The main issue was getting the data formats to align. Our legacy system exports in one format, and the new tool expects another. We had to build a converter.
+
+AI Assistant: How did you approach solving that problem?
+
+Employee: I worked with IT to create a simple script that runs before the report. It's not perfect, but it works reliably now.
+
+AI Assistant: That's resourceful problem-solving. Are there other areas where you see similar automation opportunities?
+
+Employee: Yes, definitely in the onboarding process. Right now there's a lot of manual steps that could be streamlined.
+
+AI Assistant: Thank you for these insights. This feedback will help prioritize our improvement roadmap.""",
+
+        """AI Assistant: Good afternoon! Let's discuss how things have been going with your processes. Any pain points you'd like to address?
+
+Employee: Actually, yes. The approval workflow has been a real bottleneck lately.
+
+AI Assistant: Tell me more about that. What specifically is causing the bottleneck?
+
+Employee: Well, for anything over a certain threshold, we need sign-offs from multiple people. If even one person is traveling or in meetings, everything just sits there.
+
+AI Assistant: How long do these delays typically last?
+
+Employee: Sometimes days. I've had requests sit for almost a week before because key approvers were out.
+
+AI Assistant: That does sound frustrating. Have you tried any workarounds?
+
+Employee: We've started pre-socializing bigger requests before they go into the formal workflow. It helps, but it's extra work.
+
+AI Assistant: What would an ideal solution look like for you?
+
+Employee: Honestly, either auto-escalation after a certain time, or maybe delegate approvers when someone's out. The technology exists, we just haven't implemented it.
+
+AI Assistant: Those are excellent suggestions. This kind of specific feedback is exactly what we need to improve the system."""
+    ]
+
+    try:
+        created_employees = []
+        created_calls = []
+
+        for i, emp in enumerate(sample_employees):
+            # Create employee
+            employee_data = {
+                "name": emp["name"],
+                "phone_number": emp["phone_number"],
+                "email": emp["email"],
+                "department": emp["department"],
+                "role": emp["role"],
+                "status": "completed" if i < 12 else ("scheduled" if i < 16 else "pending"),
+                "notes": f"Sample employee for demo - {emp['department']}"
+            }
+
+            result = supabase.client.table("employees").insert(employee_data).execute()
+            if result.data:
+                created_employees.append(result.data[0])
+
+                # Create call sessions with transcripts for completed employees
+                if i < 12:
+                    base_date = datetime.utcnow() - timedelta(days=30 - i)
+                    call_data = {
+                        "id": str(uuid.uuid4()),
+                        "phone_number": emp["phone_number"],
+                        "direction": "outbound",
+                        "status": "completed",
+                        "platform": "vapi",
+                        "transcript": sample_transcripts[i % len(sample_transcripts)],
+                        "summary": f"Interview with {emp['name']} from {emp['department']}. Discussed daily workflows, process challenges, and improvement opportunities.",
+                        "duration_seconds": 900 + (i * 120),  # 15-35 minutes
+                        "started_at": base_date.isoformat(),
+                        "ended_at": (base_date + timedelta(minutes=15 + i * 2)).isoformat(),
+                        "created_at": base_date.isoformat()
+                    }
+
+                    call_result = supabase.client.table("call_sessions").insert(call_data).execute()
+                    if call_result.data:
+                        created_calls.append(call_result.data[0])
+
+        return {
+            "success": True,
+            "employees_created": len(created_employees),
+            "call_sessions_created": len(created_calls),
+            "message": f"Created {len(created_employees)} employees and {len(created_calls)} call sessions with transcripts"
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to seed employees: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Consultations endpoints
 @app.get("/consultations")
 async def get_consultations():
