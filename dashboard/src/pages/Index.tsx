@@ -12,6 +12,7 @@ import DataHub from './DataHub';
 import Settings from './Settings';
 import Notifications from './Notifications';
 import Profile from './Profile';
+import Interview from './Interview';
 
 const Index = () => {
   const location = useLocation();
@@ -53,6 +54,8 @@ const Index = () => {
         return <Notifications />;
       case 'profile':
         return <Profile />;
+      case 'interview':
+        return <Interview onNavigate={setActiveView} />;
       default:
         return <Dashboard onNavigate={setActiveView} />;
     }

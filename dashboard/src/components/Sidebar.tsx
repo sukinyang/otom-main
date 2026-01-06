@@ -5,7 +5,8 @@ import {
   Settings,
   ChevronLeft,
   LayoutDashboard,
-  Database
+  Database,
+  Mic
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ const Sidebar = ({ activeView, onViewChange }: SidebarProps) => {
   ];
 
   const bottomNavItems = [
+    { id: 'interview', label: 'Interview', icon: Mic },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
