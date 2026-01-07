@@ -124,6 +124,68 @@ export interface Report {
   created_at: string
 }
 
+export interface Document {
+  id: string
+  name: string
+  file_path?: string
+  file_url?: string
+  file_type: string
+  file_size?: number
+  category?: string
+  department?: string
+  extracted_text?: string
+  summary?: string
+  status: string
+  uploaded_by?: string
+  created_at: string
+}
+
+export interface CallInsights {
+  id: string
+  call_session_id: string
+  summary?: string
+  pain_points?: Array<{
+    description: string
+    severity: string
+    frequency: string
+    impact: string
+    quote?: string
+  }>
+  workarounds?: Array<{
+    description: string
+    reason: string
+    time_cost: string
+  }>
+  tools_mentioned?: Array<{
+    name: string
+    usage: string
+    satisfaction: string
+    issues?: string
+  }>
+  improvement_suggestions?: Array<{
+    suggestion: string
+    source: string
+    priority: string
+    expected_impact: string
+  }>
+  automation_opportunities?: Array<{
+    process: string
+    current_time: string
+    automation_type: string
+    complexity: string
+  }>
+  key_quotes?: Array<{
+    quote: string
+    context: string
+    sentiment: string
+  }>
+  sentiment?: string
+  engagement_level?: string
+  follow_up_questions?: string[]
+  analyzed_at: string
+  created_at: string
+}
+
 class ApiService {
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -350,6 +412,103 @@ class ApiService {
     return this.fetch<Report>('/reports', {
       method: 'POST',
       body: JSON.stringify(data),
+    })
+  }
+
+  // Documents
+  async getDocuments(params?: { category?: string; department?: string; limit?: number }) {
+    const searchParams = new URLSearchParams()
+    if (params?.category) searchParams.set('category', params.category)
+    if (params?.department) searchParams.set('department', params.department)
+    if (params?.limit) searchParams.set('limit', params.limit.toString())
+
+    const query = searchParams.toString()
+    return this.fetch<{ documents: Document[]; total: number }>(
+      `/documents${query ? `?${query}` : ''}`
+    )
+  }
+
+  async uploadDocument(file: File, category?: string, department?: string) {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (category) formData.append('category', category)
+    if (department) formData.append('department', department)
+
+    const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`)
+    }
+
+    return response.json() as Promise<{
+      status: string
+      document: {
+        id: string
+        name: string
+        file_url?: string
+        summary?: string
+        page_count?: number
+        category?: string
+        department?: string
+      }
+    }>
+  }
+
+  async deleteDocument(id: string) {
+    return this.fetch<{ status: string; id: string }>(`/documents/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // AI Insights
+  async getInsights(limit = 50) {
+    return this.fetch<{ insights: CallInsights[]; total: number }>(`/insights?limit=${limit}`)
+  }
+
+  async getCallInsights(callSessionId: string) {
+    return this.fetch<CallInsights>(`/insights/${callSessionId}`)
+  }
+
+  async analyzeCall(callSessionId: string) {
+    return this.fetch<{ status: string; insights: CallInsights }>(`/insights/analyze/${callSessionId}`, {
+      method: 'POST',
+    })
+  }
+
+  async synthesizeInsights(callSessionIds: string[], processName?: string) {
+    return this.fetch<{
+      executive_summary: string
+      common_pain_points: Array<{
+        pain_point: string
+        mentioned_by: number
+        severity: string
+        departments_affected: string[]
+        recommended_action: string
+      }>
+      process_bottlenecks: Array<{
+        bottleneck: string
+        impact: string
+        root_cause: string
+        solution: string
+      }>
+      quick_wins: Array<{
+        opportunity: string
+        effort: string
+        impact: string
+        timeline: string
+      }>
+      automation_priorities: Array<{
+        process: string
+        current_state: string
+        automation_approach: string
+        roi_estimate: string
+      }>
+    }>('/insights/synthesize', {
+      method: 'POST',
+      body: JSON.stringify({ call_session_ids: callSessionIds, process_name: processName }),
     })
   }
 }

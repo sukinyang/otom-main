@@ -6,7 +6,7 @@ Voice-first AI business consultant using Whisper (STT) + Sesame (TTS)
 import os
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
@@ -1187,6 +1187,284 @@ Reply STOP to opt out. HELP for help.</code>
     </html>
     """
     return HTMLResponse(content=html_content)
+
+
+# ============================================
+# AI Insights Endpoints
+# ============================================
+
+@app.get("/insights")
+async def list_insights(limit: int = 50):
+    """Get all AI-generated call insights"""
+    from integrations.supabase_mcp import supabase
+    try:
+        insights = await supabase.list_call_insights(limit=limit)
+        return {"insights": insights, "total": len(insights)}
+    except Exception as e:
+        logger.error(f"Failed to list insights: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/insights/{call_session_id}")
+async def get_insights(call_session_id: str):
+    """Get AI insights for a specific call session"""
+    from integrations.supabase_mcp import supabase
+    try:
+        insights = await supabase.get_call_insights(call_session_id)
+        if not insights:
+            raise HTTPException(status_code=404, detail="Insights not found")
+        return insights
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get insights: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/insights/analyze/{call_session_id}")
+async def analyze_call(call_session_id: str):
+    """Manually trigger AI analysis for a call session"""
+    from integrations.supabase_mcp import supabase
+    from core.analysis.transcript_analyzer import transcript_analyzer
+
+    try:
+        # Get the call session
+        call = await supabase.get_call_session(call_session_id)
+        if not call:
+            raise HTTPException(status_code=404, detail="Call session not found")
+
+        transcript = call.get("transcript")
+        if not transcript or len(transcript) < 100:
+            raise HTTPException(status_code=400, detail="No transcript available for analysis")
+
+        # Check if already analyzed
+        existing = await supabase.get_call_insights(call_session_id)
+        if existing:
+            return {"status": "already_analyzed", "insights": existing}
+
+        # Get employee info for context
+        employee_name = None
+        department = None
+        role = None
+        phone = call.get("phone_number")
+
+        if phone and supabase.client:
+            try:
+                result = supabase.client.table("employees").select(
+                    "name, department, role"
+                ).eq("phone_number", phone).execute()
+                if result.data:
+                    emp = result.data[0]
+                    employee_name = emp.get("name")
+                    department = emp.get("department")
+                    role = emp.get("role")
+            except:
+                pass
+
+        # Run analysis
+        insights = await transcript_analyzer.analyze_transcript(
+            transcript=transcript,
+            employee_name=employee_name,
+            department=department,
+            role=role
+        )
+
+        if "error" in insights:
+            raise HTTPException(status_code=500, detail=insights["error"])
+
+        # Store insights
+        await supabase.store_call_insights(call_session_id, insights)
+
+        return {"status": "analyzed", "insights": insights}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to analyze call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/insights/synthesize")
+async def synthesize_insights(request: Request):
+    """Synthesize insights across multiple call sessions"""
+    from integrations.supabase_mcp import supabase
+    from core.analysis.transcript_analyzer import transcript_analyzer
+
+    try:
+        data = await request.json()
+        call_session_ids = data.get("call_session_ids", [])
+        process_name = data.get("process_name")
+
+        if not call_session_ids:
+            raise HTTPException(status_code=400, detail="No call sessions specified")
+
+        # Get transcripts for each session
+        transcripts = []
+        for session_id in call_session_ids:
+            call = await supabase.get_call_session(session_id)
+            if call and call.get("transcript"):
+                # Get employee info
+                phone = call.get("phone_number")
+                employee_name = None
+                department = None
+                role = None
+
+                if phone and supabase.client:
+                    try:
+                        result = supabase.client.table("employees").select(
+                            "name, department, role"
+                        ).eq("phone_number", phone).execute()
+                        if result.data:
+                            emp = result.data[0]
+                            employee_name = emp.get("name")
+                            department = emp.get("department")
+                            role = emp.get("role")
+                    except:
+                        pass
+
+                transcripts.append({
+                    "transcript": call.get("transcript"),
+                    "employee_name": employee_name,
+                    "department": department,
+                    "role": role
+                })
+
+        if not transcripts:
+            raise HTTPException(status_code=400, detail="No valid transcripts found")
+
+        # Run synthesis
+        synthesis = await transcript_analyzer.analyze_multiple_transcripts(
+            transcripts=transcripts,
+            process_name=process_name
+        )
+
+        return synthesis
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to synthesize insights: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# Document Upload Endpoints (PDF Context)
+# ============================================
+
+@app.post("/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    category: str = Form(None),
+    department: str = Form(None)
+):
+    """Upload a document (PDF) for AI context"""
+    from integrations.supabase_mcp import supabase
+    from core.documents.pdf_processor import pdf_processor
+
+    try:
+        # Validate file type
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+        # Read file
+        content = await file.read()
+        if len(content) > 10 * 1024 * 1024:  # 10MB limit
+            raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+        # Process PDF
+        doc_data = await pdf_processor.process_pdf(
+            pdf_bytes=content,
+            filename=file.filename,
+            category=category,
+            department=department
+        )
+
+        # Upload to Supabase storage
+        file_path = f"documents/{doc_data['id']}/{file.filename}"
+        file_url = await supabase.upload_file(
+            file_data=content,
+            file_name=file.filename,
+            folder=f"documents/{doc_data['id']}",
+            content_type="application/pdf"
+        )
+
+        doc_data["file_path"] = file_path
+        doc_data["file_url"] = file_url
+
+        # Store document metadata
+        stored = await supabase.store_document(doc_data)
+
+        return {
+            "status": "uploaded",
+            "document": {
+                "id": stored.get("id"),
+                "name": stored.get("name"),
+                "file_url": file_url,
+                "summary": stored.get("summary"),
+                "page_count": doc_data.get("page_count"),
+                "category": category,
+                "department": department
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to upload document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/documents")
+async def list_documents(
+    category: str = None,
+    department: str = None,
+    limit: int = 50
+):
+    """List uploaded documents"""
+    from integrations.supabase_mcp import supabase
+    try:
+        documents = await supabase.get_documents(
+            category=category,
+            department=department,
+            limit=limit
+        )
+        return {"documents": documents, "total": len(documents)}
+    except Exception as e:
+        logger.error(f"Failed to list documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/documents/context")
+async def get_document_context(
+    department: str = None,
+    categories: str = None
+):
+    """Get combined document context for AI assistant"""
+    from integrations.supabase_mcp import supabase
+    try:
+        category_list = categories.split(",") if categories else None
+        context = await supabase.get_document_context(
+            department=department,
+            categories=category_list
+        )
+        return {
+            "context": context,
+            "length": len(context)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get document context: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/documents/{document_id}")
+async def delete_document(document_id: str):
+    """Delete a document"""
+    from integrations.supabase_mcp import supabase
+    if not supabase.client:
+        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        # Soft delete - set status to deleted
+        supabase.client.table("documents").update(
+            {"status": "deleted"}
+        ).eq("id", document_id).execute()
+        return {"status": "deleted", "id": document_id}
+    except Exception as e:
+        logger.error(f"Failed to delete document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Include interface routers

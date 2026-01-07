@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from utils.logger import setup_logger
 from integrations.supabase_mcp import supabase
+from core.analysis.transcript_analyzer import transcript_analyzer
 
 logger = setup_logger("voice_handler")
 
@@ -218,6 +219,21 @@ class VoiceInterface:
             "status": "connecting"
         }
 
+        # Look up employee to get department for context
+        department = None
+        if supabase.client:
+            try:
+                result = supabase.client.table("employees").select("department").eq(
+                    "phone_number", phone_number
+                ).execute()
+                if result.data:
+                    department = result.data[0].get("department")
+            except Exception as e:
+                logger.warning(f"Could not fetch employee department: {e}")
+
+        # Get document context for smarter questions
+        document_context = await self._get_document_context_for_call(department)
+
         # Store in Supabase
         await supabase.create_call_session({
             "session_id": session_id,
@@ -233,12 +249,12 @@ class VoiceInterface:
             "direction": "inbound"
         })
 
-        # Return dynamic assistant configuration
-        assistant_config = self._build_assistant_config(session_id)
+        # Return dynamic assistant configuration with document context
+        assistant_config = self._build_assistant_config(session_id, document_context)
 
         return JSONResponse(content={"assistant": assistant_config})
 
-    def _build_assistant_config(self, session_id: str) -> Dict:
+    def _build_assistant_config(self, session_id: str, document_context: str = "") -> Dict:
         """
         Build Vapi assistant configuration.
         This defines how Otom behaves on the phone.
@@ -264,7 +280,7 @@ class VoiceInterface:
                 "messages": [
                     {
                         "role": "system",
-                        "content": self._get_system_prompt(session_id)
+                        "content": self._get_system_prompt(session_id, document_context)
                     }
                 ],
                 "temperature": 0.7,
@@ -310,9 +326,23 @@ class VoiceInterface:
             "tools": self._get_assistant_tools()
         }
 
-    def _get_system_prompt(self, session_id: str) -> str:
+    async def _get_document_context_for_call(self, department: str = None) -> str:
+        """Get relevant document context for the call"""
+        try:
+            context = await supabase.get_document_context(
+                department=department,
+                categories=["handbook", "sop", "policy"]
+            )
+            if context:
+                return f"\n\nRELEVANT COMPANY DOCUMENTATION:\n{context[:4000]}"
+            return ""
+        except Exception as e:
+            logger.warning(f"Could not fetch document context: {e}")
+            return ""
+
+    def _get_system_prompt(self, session_id: str, document_context: str = "") -> str:
         """Get Otom's system prompt for voice conversations"""
-        return """You are Otom, an elite AI business consultant with expertise from McKinsey, BCG, and Bain methodologies.
+        base_prompt = """You are Otom, an elite AI business consultant with expertise from McKinsey, BCG, and Bain methodologies.
 
 VOICE CONVERSATION GUIDELINES:
 - Keep responses concise (2-3 sentences max) - this is a phone call, not an essay
@@ -339,8 +369,13 @@ IMPORTANT:
 - Don't say "as an AI" or similar - you're Otom, a consultant
 - If they ask to schedule a follow-up, use the schedule_consultation tool
 - If they want a detailed analysis, let them know you'll send a written report after the call
+- Use the company documentation context provided below to ask smarter, more informed questions
+- Reference specific procedures or policies when relevant to the conversation"""
 
-Current session: """ + session_id
+        if document_context:
+            base_prompt += document_context
+
+        return base_prompt + f"\n\nCurrent session: {session_id}"
 
     def _get_assistant_tools(self) -> List[Dict]:
         """Define tools Otom can use during calls"""
@@ -570,6 +605,7 @@ Current session: """ + session_id
 
         # Find session by call metadata
         session_id = call.get("metadata", {}).get("session_id")
+        final_session_id = None
 
         if session_id and session_id in self.active_calls:
             self.active_calls[session_id].update({
@@ -593,6 +629,7 @@ Current session: """ + session_id
                 "platform": "vapi",
                 "duration_seconds": duration
             })
+            final_session_id = session_id
         else:
             # Session not in memory - create a new call record directly
             # This handles cases where server restarted or call came from Vapi directly
@@ -623,8 +660,80 @@ Current session: """ + session_id
                 "platform": "vapi",
                 "duration_seconds": duration
             })
+            final_session_id = new_session_id
+
+        # Trigger AI analysis of transcript in background
+        if transcript and len(transcript) > 100 and final_session_id:
+            asyncio.create_task(self._analyze_transcript_background(
+                final_session_id,
+                transcript,
+                phone_number
+            ))
 
         return JSONResponse(content={"status": "received"})
+
+    async def _analyze_transcript_background(
+        self,
+        session_id: str,
+        transcript: str,
+        phone_number: str
+    ):
+        """Background task to analyze transcript and store insights"""
+        try:
+            logger.info(f"Starting AI analysis for session {session_id}")
+
+            # Look up employee info by phone number for context
+            employee_name = None
+            department = None
+            role = None
+
+            if supabase.client:
+                try:
+                    result = supabase.client.table("employees").select(
+                        "name, department, role"
+                    ).eq("phone_number", phone_number).execute()
+                    if result.data:
+                        emp = result.data[0]
+                        employee_name = emp.get("name")
+                        department = emp.get("department")
+                        role = emp.get("role")
+                except Exception as e:
+                    logger.warning(f"Could not fetch employee for analysis: {e}")
+
+            # Run AI analysis
+            insights = await transcript_analyzer.analyze_transcript(
+                transcript=transcript,
+                employee_name=employee_name,
+                department=department,
+                role=role
+            )
+
+            if "error" not in insights:
+                # Store insights in database
+                await supabase.store_call_insights(session_id, insights)
+                logger.info(f"AI analysis completed and stored for session {session_id}")
+
+                # Update call session with analysis status
+                await supabase.update_call_session(session_id, {
+                    "analysis_status": "completed",
+                    "insights_id": insights.get("id")
+                })
+            else:
+                logger.error(f"AI analysis failed: {insights.get('error')}")
+                await supabase.update_call_session(session_id, {
+                    "analysis_status": "failed",
+                    "analysis_error": insights.get("error")
+                })
+
+        except Exception as e:
+            logger.error(f"Background transcript analysis failed: {e}")
+            try:
+                await supabase.update_call_session(session_id, {
+                    "analysis_status": "failed",
+                    "analysis_error": str(e)
+                })
+            except:
+                pass
 
     async def _handle_status_update(self, payload: Dict) -> JSONResponse:
         """Handle status updates from Vapi"""

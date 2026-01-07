@@ -15,16 +15,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { api, Employee } from '@/services/api';
-
-interface UploadedFile {
-  id: string;
-  name: string;
-  type: string;
-  size: number;
-  uploadedAt: Date;
-  aiDescription: string;
-}
+import { api, Employee, Document } from '@/services/api';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const DataHub = () => {
   const { toast } = useToast();
@@ -35,6 +33,15 @@ const DataHub = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeesLoading, setEmployeesLoading] = useState(true);
   const [employeesError, setEmployeesError] = useState<string | null>(null);
+
+  // Document data from API
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  // Upload options
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
 
   // Fetch employees from API
   useEffect(() => {
@@ -55,40 +62,23 @@ const DataHub = () => {
     fetchEmployees();
   }, []);
 
-  const [files, setFiles] = useState<UploadedFile[]>([
-    {
-      id: '1',
-      name: 'Employee Handbook 2024.pdf',
-      type: 'application/pdf',
-      size: 2456000,
-      uploadedAt: new Date('2024-01-15'),
-      aiDescription: 'Comprehensive employee handbook covering company policies, benefits, code of conduct, and workplace procedures for 2024.'
-    },
-    {
-      id: '2',
-      name: 'Onboarding Process Map.pdf',
-      type: 'application/pdf',
-      size: 1234000,
-      uploadedAt: new Date('2024-01-20'),
-      aiDescription: 'Visual flowchart detailing the complete employee onboarding journey from offer acceptance to 90-day review.'
-    },
-    {
-      id: '3',
-      name: 'IT Support Flowchart.png',
-      type: 'image/png',
-      size: 567000,
-      uploadedAt: new Date('2024-02-01'),
-      aiDescription: 'Decision tree for IT support ticket escalation and resolution pathways across different issue categories.'
-    },
-    {
-      id: '4',
-      name: 'Sales Training Guide.docx',
-      type: 'application/docx',
-      size: 890000,
-      uploadedAt: new Date('2024-02-10'),
-      aiDescription: 'Training material for sales team covering product knowledge, objection handling, and CRM usage guidelines.'
-    }
-  ]);
+  // Fetch documents from API
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        setDocumentsLoading(true);
+        const data = await api.getDocuments();
+        setDocuments(data.documents || []);
+      } catch (err) {
+        console.error('Failed to fetch documents:', err);
+      } finally {
+        setDocumentsLoading(false);
+      }
+    };
+
+    fetchDocuments();
+  }, []);
+
   const [isDragging, setIsDragging] = useState(false);
 
   const formatFileSize = (bytes: number) => {
@@ -139,21 +129,65 @@ const DataHub = () => {
     handleFiles(droppedFiles);
   };
 
-  const handleFiles = (fileList: File[]) => {
-    const newFiles: UploadedFile[] = fileList.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      uploadedAt: new Date(),
-      aiDescription: 'Analyzing document content...'
-    }));
-    
-    setFiles(prev => [...newFiles, ...prev]);
-    toast({
-      title: "Files uploaded",
-      description: `${fileList.length} file${fileList.length > 1 ? 's' : ''} added to Data Hub`
-    });
+  const handleFiles = async (fileList: File[]) => {
+    // Only allow PDFs for now
+    const pdfFiles = fileList.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+
+    if (pdfFiles.length === 0) {
+      toast({
+        title: "Invalid file type",
+        description: "Only PDF files are currently supported",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setUploading(true);
+    let successCount = 0;
+
+    for (const file of pdfFiles) {
+      try {
+        const result = await api.uploadDocument(
+          file,
+          selectedCategory || undefined,
+          selectedDepartment || undefined
+        );
+
+        if (result.status === 'uploaded') {
+          // Add to local state
+          const newDoc: Document = {
+            id: result.document.id,
+            name: result.document.name,
+            file_url: result.document.file_url,
+            file_type: 'pdf',
+            file_size: file.size,
+            category: result.document.category,
+            department: result.document.department,
+            summary: result.document.summary,
+            status: 'active',
+            created_at: new Date().toISOString()
+          };
+          setDocuments(prev => [newDoc, ...prev]);
+          successCount++;
+        }
+      } catch (err) {
+        console.error('Failed to upload file:', err);
+        toast({
+          title: "Upload failed",
+          description: `Failed to upload ${file.name}`,
+          variant: "destructive"
+        });
+      }
+    }
+
+    setUploading(false);
+
+    if (successCount > 0) {
+      toast({
+        title: "Files uploaded",
+        description: `${successCount} file${successCount > 1 ? 's' : ''} uploaded and processed by AI`
+      });
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,16 +196,26 @@ const DataHub = () => {
     }
   };
 
-  const handleDelete = (id: string) => {
-    setFiles(prev => prev.filter(f => f.id !== id));
-    toast({
-      title: "File removed",
-      description: "File has been removed from Data Hub"
-    });
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteDocument(id);
+      setDocuments(prev => prev.filter(f => f.id !== id));
+      toast({
+        title: "File removed",
+        description: "File has been removed from Data Hub"
+      });
+    } catch (err) {
+      console.error('Failed to delete document:', err);
+      toast({
+        title: "Delete failed",
+        description: "Failed to remove the file",
+        variant: "destructive"
+      });
+    }
   };
 
   const stats = {
-    total: files.length,
+    total: documents.length,
     employeesWithContext: employees.filter(e => e.notes).length,
     totalQuestions: 0, // Questions will be stored in employee notes or a separate API
     totalEmployeeFiles: 0 // Files per employee will come from a separate API
@@ -256,19 +300,57 @@ const DataHub = () => {
             <CardHeader>
               <CardTitle className="text-lg">Upload Documents</CardTitle>
               <CardDescription>
-                Drop files here or click to browse. Supported: PDF, Word, Excel, PowerPoint, Images
+                Upload PDF files (employee handbooks, SOPs, policies) to help AI ask smarter interview questions
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Category and Department Selection */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-sm font-medium mb-2 block">Category</label>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="handbook">Employee Handbook</SelectItem>
+                      <SelectItem value="sop">Standard Operating Procedure</SelectItem>
+                      <SelectItem value="policy">Company Policy</SelectItem>
+                      <SelectItem value="training">Training Material</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-sm font-medium mb-2 block">Department</label>
+                  <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="HR">HR</SelectItem>
+                      <SelectItem value="Operations">Operations</SelectItem>
+                      <SelectItem value="Sales">Sales</SelectItem>
+                      <SelectItem value="Engineering">Engineering</SelectItem>
+                      <SelectItem value="Finance">Finance</SelectItem>
+                      <SelectItem value="Marketing">Marketing</SelectItem>
+                      <SelectItem value="IT">IT</SelectItem>
+                      <SelectItem value="all">All Departments</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !uploading && fileInputRef.current?.click()}
                 className={`
-                  border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
-                  ${isDragging 
-                    ? 'border-primary bg-primary/5' 
+                  border-2 border-dashed rounded-xl p-8 text-center transition-all
+                  ${uploading ? 'cursor-wait opacity-50' : 'cursor-pointer'}
+                  ${isDragging
+                    ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-primary/50 hover:bg-muted/50'
                   }
                 `}
@@ -279,18 +361,23 @@ const DataHub = () => {
                   multiple
                   onChange={handleFileSelect}
                   className="hidden"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif"
+                  accept=".pdf"
+                  disabled={uploading}
                 />
                 <div className="flex flex-col items-center gap-3">
                   <div className="p-4 bg-primary/10 rounded-full">
-                    <Upload className="w-8 h-8 text-primary" />
+                    {uploading ? (
+                      <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    ) : (
+                      <Upload className="w-8 h-8 text-primary" />
+                    )}
                   </div>
                   <div>
                     <p className="font-medium text-foreground">
-                      {isDragging ? 'Drop files here' : 'Drag & drop files here'}
+                      {uploading ? 'Uploading and analyzing...' : isDragging ? 'Drop files here' : 'Drag & drop PDF files here'}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      or click to browse from your computer
+                      {uploading ? 'AI is extracting text and generating summaries' : 'or click to browse from your computer'}
                     </p>
                   </div>
                 </div>
@@ -307,7 +394,12 @@ const DataHub = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {files.length === 0 ? (
+              {documentsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <span className="ml-2 text-muted-foreground">Loading documents...</span>
+                </div>
+              ) : documents.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <FolderOpen className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>No documents uploaded yet</p>
@@ -315,38 +407,65 @@ const DataHub = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {files.map((file) => (
+                  {documents.map((doc) => (
                     <div
-                      key={file.id}
+                      key={doc.id}
                       className="flex items-start gap-4 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
                     >
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${getExtensionColor(file.name)}`}>
-                        {getFileExtension(file.name)}
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${getExtensionColor(doc.name)}`}>
+                        {getFileExtension(doc.name)}
                       </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{file.name}</p>
+                          <p className="font-medium text-sm truncate">{doc.name}</p>
                           <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                            {file.aiDescription}
+                            {doc.summary || 'Processing document...'}
                           </p>
                           <div className="flex items-center gap-2 mt-2">
+                            {doc.file_size && (
+                              <>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatFileSize(doc.file_size)}
+                                </span>
+                                <span className="text-xs text-muted-foreground">•</span>
+                              </>
+                            )}
+                            {doc.category && (
+                              <>
+                                <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+                                  {doc.category}
+                                </span>
+                                <span className="text-xs text-muted-foreground">•</span>
+                              </>
+                            )}
+                            {doc.department && (
+                              <>
+                                <span className="text-xs text-muted-foreground">
+                                  {doc.department}
+                                </span>
+                                <span className="text-xs text-muted-foreground">•</span>
+                              </>
+                            )}
                             <span className="text-xs text-muted-foreground">
-                              {formatFileSize(file.size)}
-                            </span>
-                            <span className="text-xs text-muted-foreground">•</span>
-                            <span className="text-xs text-muted-foreground">
-                              {file.uploadedAt.toLocaleDateString()}
+                              {new Date(doc.created_at).toLocaleDateString()}
                             </span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          {doc.file_url && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => window.open(doc.file_url, '_blank')}
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(file.id)}
+                            onClick={() => handleDelete(doc.id)}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>

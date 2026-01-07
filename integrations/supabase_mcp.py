@@ -620,6 +620,190 @@ class SupabaseBackend:
             logger.error(f"Failed to subscribe to messages: {str(e)}")
 
 
+    # ===========================================
+    # CALL INSIGHTS (AI Analysis Results)
+    # ===========================================
+
+    async def store_call_insights(self, call_session_id: str, insights: Dict) -> Dict:
+        """Store AI-generated insights from call transcript analysis"""
+        if not self._check_client():
+            return insights
+
+        try:
+            data = {
+                "id": insights.get("id", str(uuid.uuid4())),
+                "call_session_id": call_session_id,
+                "summary": insights.get("summary"),
+                "pain_points": json.dumps(insights.get("pain_points", [])),
+                "workarounds": json.dumps(insights.get("workarounds", [])),
+                "tools_mentioned": json.dumps(insights.get("tools_mentioned", [])),
+                "improvement_suggestions": json.dumps(insights.get("improvement_suggestions", [])),
+                "automation_opportunities": json.dumps(insights.get("automation_opportunities", [])),
+                "key_quotes": json.dumps(insights.get("key_quotes", [])),
+                "sentiment": insights.get("sentiment"),
+                "engagement_level": insights.get("engagement_level"),
+                "follow_up_questions": json.dumps(insights.get("follow_up_questions", [])),
+                "analyzed_at": insights.get("analyzed_at", datetime.utcnow().isoformat()),
+                "model_used": insights.get("model_used"),
+                "created_at": datetime.utcnow().isoformat()
+            }
+
+            # Remove None values
+            data = {k: v for k, v in data.items() if v is not None}
+
+            response = self.client.table("call_insights").insert(data).execute()
+            logger.info(f"Stored call insights: {data['id']} for session {call_session_id}")
+            return response.data[0] if response.data else data
+
+        except Exception as e:
+            logger.error(f"Failed to store call insights: {str(e)}")
+            return insights
+
+    async def get_call_insights(self, call_session_id: str) -> Optional[Dict]:
+        """Get insights for a specific call session"""
+        if not self._check_client():
+            return None
+
+        try:
+            response = self.client.table("call_insights").select("*").eq(
+                "call_session_id", call_session_id
+            ).single().execute()
+
+            if response.data:
+                data = response.data
+                # Parse JSON fields
+                for field in ["pain_points", "workarounds", "tools_mentioned",
+                              "improvement_suggestions", "automation_opportunities",
+                              "key_quotes", "follow_up_questions"]:
+                    if data.get(field):
+                        data[field] = json.loads(data[field])
+                return data
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to get call insights: {str(e)}")
+            return None
+
+    async def list_call_insights(self, limit: int = 50) -> List[Dict]:
+        """List all call insights"""
+        if not self._check_client():
+            return []
+
+        try:
+            response = self.client.table("call_insights").select("*").order(
+                "created_at", desc=True
+            ).limit(limit).execute()
+
+            insights = response.data if response.data else []
+            for item in insights:
+                for field in ["pain_points", "workarounds", "tools_mentioned",
+                              "improvement_suggestions", "automation_opportunities",
+                              "key_quotes", "follow_up_questions"]:
+                    if item.get(field):
+                        item[field] = json.loads(item[field])
+            return insights
+
+        except Exception as e:
+            logger.error(f"Failed to list call insights: {str(e)}")
+            return []
+
+    # ===========================================
+    # DOCUMENT STORAGE (PDFs, SOPs, Handbooks)
+    # ===========================================
+
+    async def store_document(self, document_data: Dict) -> Dict:
+        """Store document metadata and extracted text"""
+        if not self._check_client():
+            return document_data
+
+        try:
+            data = {
+                "id": document_data.get("id", str(uuid.uuid4())),
+                "name": document_data.get("name"),
+                "file_path": document_data.get("file_path"),
+                "file_url": document_data.get("file_url"),
+                "file_type": document_data.get("file_type", "pdf"),
+                "file_size": document_data.get("file_size"),
+                "category": document_data.get("category"),  # handbook, sop, policy, etc.
+                "department": document_data.get("department"),
+                "extracted_text": document_data.get("extracted_text"),
+                "summary": document_data.get("summary"),
+                "status": document_data.get("status", "active"),
+                "uploaded_by": document_data.get("uploaded_by"),
+                "created_at": datetime.utcnow().isoformat()
+            }
+
+            # Remove None values
+            data = {k: v for k, v in data.items() if v is not None}
+
+            response = self.client.table("documents").insert(data).execute()
+            logger.info(f"Stored document: {data['name']}")
+            return response.data[0] if response.data else data
+
+        except Exception as e:
+            logger.error(f"Failed to store document: {str(e)}")
+            return document_data
+
+    async def get_documents(self, category: str = None, department: str = None, limit: int = 50) -> List[Dict]:
+        """Get documents with optional filters"""
+        if not self._check_client():
+            return []
+
+        try:
+            query = self.client.table("documents").select("*")
+
+            if category:
+                query = query.eq("category", category)
+            if department:
+                query = query.eq("department", department)
+
+            query = query.eq("status", "active").order("created_at", desc=True).limit(limit)
+            response = query.execute()
+
+            return response.data if response.data else []
+
+        except Exception as e:
+            logger.error(f"Failed to get documents: {str(e)}")
+            return []
+
+    async def get_document_context(self, department: str = None, categories: List[str] = None) -> str:
+        """Get combined document context for AI assistant"""
+        if not self._check_client():
+            return ""
+
+        try:
+            query = self.client.table("documents").select("name, category, summary, extracted_text")
+            query = query.eq("status", "active")
+
+            if department:
+                query = query.eq("department", department)
+            if categories:
+                query = query.in_("category", categories)
+
+            response = query.limit(10).execute()
+
+            if not response.data:
+                return ""
+
+            # Combine document context
+            context_parts = []
+            for doc in response.data:
+                doc_context = f"### {doc['name']} ({doc.get('category', 'document')})\n"
+                if doc.get("summary"):
+                    doc_context += f"Summary: {doc['summary']}\n"
+                if doc.get("extracted_text"):
+                    # Limit text to avoid token limits
+                    text = doc["extracted_text"][:3000]
+                    doc_context += f"Content:\n{text}\n"
+                context_parts.append(doc_context)
+
+            return "\n---\n".join(context_parts)
+
+        except Exception as e:
+            logger.error(f"Failed to get document context: {str(e)}")
+            return ""
+
+
 # Global instance
 supabase = SupabaseBackend()
 
