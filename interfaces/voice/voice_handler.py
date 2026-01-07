@@ -563,8 +563,10 @@ Current session: """ + session_id
         duration = message.get("durationSeconds", 0)
         transcript = message.get("transcript", "")
         summary = message.get("summary", "")
+        customer = call.get("customer", {})
+        phone_number = customer.get("number", "")
 
-        logger.info(f"Call ended: {call_id}, Duration: {duration}s")
+        logger.info(f"Call ended: {call_id}, Duration: {duration}s, Phone: {phone_number}")
 
         # Find session by call metadata
         session_id = call.get("metadata", {}).get("session_id")
@@ -588,6 +590,36 @@ Current session: """ + session_id
             # Track analytics
             await supabase.track_event("call_completed", {
                 "session_id": session_id,
+                "platform": "vapi",
+                "duration_seconds": duration
+            })
+        else:
+            # Session not in memory - create a new call record directly
+            # This handles cases where server restarted or call came from Vapi directly
+            logger.info(f"Session {session_id} not in memory, creating new call record")
+
+            new_session_id = session_id or str(uuid.uuid4())
+            call_data = {
+                "id": new_session_id,
+                "phone_number": phone_number,
+                "direction": "inbound",
+                "status": "completed",
+                "platform": "vapi",
+                "vapi_call_id": call_id,
+                "transcript": transcript,
+                "summary": summary,
+                "duration_seconds": duration,
+                "started_at": datetime.utcnow().isoformat(),
+                "ended_at": datetime.utcnow().isoformat(),
+                "metadata": call.get("metadata", {})
+            }
+
+            # Save directly to database
+            await supabase.create_call_session(call_data)
+
+            # Track analytics
+            await supabase.track_event("call_completed", {
+                "session_id": new_session_id,
                 "platform": "vapi",
                 "duration_seconds": duration
             })
