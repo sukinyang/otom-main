@@ -180,7 +180,7 @@ class OtomConsultant:
         """
 
         response = await self.openai_client.chat.completions.create(
-            model="gpt-4-turbo-preview",
+            model="gpt-5.2",
             messages=[{"role": "system", "content": discovery_prompt}],
             response_format={"type": "json_object"},
             temperature=0.3

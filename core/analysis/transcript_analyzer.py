@@ -150,7 +150,7 @@ Ensure all JSON is properly formatted."""
 
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-5.2",
                 messages=[
                     {
                         "role": "system",
@@ -169,7 +169,7 @@ Ensure all JSON is properly formatted."""
             analysis_result["id"] = str(uuid.uuid4())
             analysis_result["analyzed_at"] = datetime.utcnow().isoformat()
             analysis_result["transcript_length"] = len(transcript)
-            analysis_result["model_used"] = "gpt-4-turbo-preview"
+            analysis_result["model_used"] = "gpt-5.2"
 
             logger.info(f"Transcript analysis completed: {analysis_result['id']}")
             return analysis_result
@@ -275,7 +275,7 @@ Focus on patterns and themes across interviews. Prioritize actionable insights."
 
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-5.2",
                 messages=[
                     {
                         "role": "system",

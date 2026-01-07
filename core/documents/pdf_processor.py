@@ -103,7 +103,7 @@ Provide a clear, structured summary:"""
 
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-5.2",
                 messages=[
                     {"role": "system", "content": "You are a document analyst. Provide clear, concise summaries."},
                     {"role": "user", "content": prompt}
