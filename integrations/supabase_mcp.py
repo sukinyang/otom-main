@@ -73,16 +73,23 @@ class SupabaseBackend:
 
         try:
             data = {
-                "id": session_data.get("session_id", str(uuid.uuid4())),
-                "vapi_call_id": session_data.get("call_id"),
+                "id": session_data.get("id") or session_data.get("session_id", str(uuid.uuid4())),
+                "vapi_call_id": session_data.get("vapi_call_id") or session_data.get("call_id"),
                 "phone_number": session_data.get("phone_number"),
-                "direction": session_data.get("direction", "outbound"),  # inbound/outbound
+                "direction": session_data.get("direction", "outbound"),
                 "status": session_data.get("status", "initiated"),
-                "platform": "vapi",
-                "metadata": json.dumps(session_data.get("metadata", {})),
-                "started_at": datetime.utcnow().isoformat(),
+                "platform": session_data.get("platform", "vapi"),
+                "transcript": session_data.get("transcript"),
+                "summary": session_data.get("summary"),
+                "duration_seconds": session_data.get("duration_seconds"),
+                "metadata": json.dumps(session_data.get("metadata", {})) if isinstance(session_data.get("metadata"), dict) else session_data.get("metadata"),
+                "started_at": session_data.get("started_at") or datetime.utcnow().isoformat(),
+                "ended_at": session_data.get("ended_at"),
                 "created_at": datetime.utcnow().isoformat()
             }
+
+            # Remove None values
+            data = {k: v for k, v in data.items() if v is not None}
 
             response = self.client.table("call_sessions").insert(data).execute()
             logger.info(f"Created call session: {data['id']}")
