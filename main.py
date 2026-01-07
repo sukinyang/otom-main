@@ -762,6 +762,40 @@ async def debug_sms_config():
         "TWILIO_PHONE_NUMBER": os.getenv("TWILIO_PHONE_NUMBER", "MISSING")
     }
 
+# Debug endpoint to test call session creation
+@app.post("/debug/test-call-save")
+async def debug_test_call_save():
+    """Test endpoint to verify call session saving works"""
+    from integrations.supabase_mcp import supabase
+    import uuid
+
+    test_id = str(uuid.uuid4())
+    test_data = {
+        "id": test_id,
+        "phone_number": "+15559999999",
+        "direction": "inbound",
+        "status": "completed",
+        "platform": "vapi",
+        "vapi_call_id": "debug-test-call",
+        "transcript": "AI: This is a test transcript.\nUser: Testing the save functionality.",
+        "summary": "Debug test call to verify database saving.",
+        "duration_seconds": 60
+    }
+
+    try:
+        result = await supabase.create_call_session(test_data)
+        return {
+            "success": True,
+            "test_id": test_id,
+            "result": result
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "test_id": test_id
+        }
+
 # Debug endpoint to check bookings
 @app.get("/debug/bookings")
 async def debug_bookings():
